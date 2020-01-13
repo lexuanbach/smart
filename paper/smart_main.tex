@@ -175,25 +175,29 @@ $$
 
 \section{Formalism of traces}
 
-\begin{definition}
-A trace set $T$ is called a $n$-approximation of a program $c$ if $c\triangleright_{n}T$ where the relation $\triangleright_{n}$ is defined as:
+\begin{figure}[t]
 $$
 \infer[{[\rname{base}]}]{c \trans_{n} c}{
 	\begin{array}{c}
 	\textsf{primitive}(c)
 	\end{array}}
 ~~~~~
-\infer[{[\rname{if}]}]{\ifs{b}{c_1}{c_2} \trans_{n} \textbf{assert}(b);t_1+\textbf{assert}(!b);t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
+\infer[{[\rname{if}]}]{\ifs{b}{c_1}{c_2} \trans_{n} \textbf{assert}(b) \cdot t_1+\textbf{assert}(!b) \cdot t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
 $$
 $$
-\infer[{[\rname{while}]}]{\whiles{b}{c} \trans_{n} (\textbf{assert}(b);t)^*;\textbf{assert}(!b)}{c \trans_{n} t}
+\infer[{[\rname{while}]}]{\whiles{b}{c} \trans_{n} (\textbf{assert}(b) \cdot t)^* \cdot \textbf{assert}(!b)}{c \trans_{n} t}
 ~~~~~~
-\infer[{[\rname{seq}]}]{c_1;c_2 \trans_{n} t_1 ; t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
+\infer[{[\rname{seq}]}]{c_1;c_2 \trans_{n} t_1 \cdot t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
 $$
 $$
 \infer[{[\rname{limit}]}]{c_f \trans_{0} c_f}{}~~~~~
 \infer[{[\rname{scope}]}]{c_f \trans_{n} c_f[t]}{n > 0~~\textsf{lookup}(c_f) = c~~~c \trans_{n-1} t}
 $$	
+\caption{Transformation rules from program to trace.}\label{fig:transform}
+\end{figure}
+
+\begin{definition}
+A trace set $T$ is called a $n$-approximation of a program $c$ if $c\triangleright_{n}T$ where the relation $\triangleright_{n}$ is defined in Fig~\ref{fig:transform}.
 \end{definition}
 
 \begin{proposition}

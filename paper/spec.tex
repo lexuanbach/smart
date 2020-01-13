@@ -97,30 +97,37 @@ $$
 \infer[{[\rname{txs}]}]{\conf{m{::}M,\chain} \leadsto \conf{M,\chain'}}
 {
 	\begin{array}{c}
-	m = (\gstate,\textit{addr})~~~\gstate.\textbf{msg} = (s,g,v,f,\bar{a})~~~ \chain(\textit{addr}) = (\mathcal{C},\lstate)~~~\mathcal{C}(f,\bar{a}) = c\\
-	\chain_1 = \chain[s \stackrel{v}{\longrightarrow} \textit{addr}][s \subg g]~~~~~~~~
-	\cstate = (\lstate,\gstate,\chain_1,\textbf{false})\\
-	\conf{c,\cstate} \stackrel{*}{\leadsto} \conf{v,\cstate'}~~~~~~~
-	\chain' = \cstate'.\chain[s \addg \cstate'.\gstate.\textbf{msg}.\textbf{gas}]
+	m = (\gstate,\textit{addr})~~~\gstate.\textbf{msg} = (s,v,f,\bar{a})~~~ \chain(\textit{addr}) = (\mathcal{C},\lstate)~~~\mathcal{C}(f,\bar{a}) = c\\
+	\chain_1 = \chain[s \stackrel{v}{\rightarrow} \textit{addr}]~~~
+	\cstate = (\lstate,\gstate,\chain_1,\textbf{false})~~~
+	\conf{c,\cstate} \stackrel{*}{\leadsto} \conf{c_\mathbb{F},\cstate'}~~~
+	\chain' = \cstate'.\chain
 	\end{array}
 }
 $$
 
 $$
-\infer[{[\rname{txf}]}]{\conf{m{::}M,\chain} \leadsto \conf{M,\chain'}}
+\infer[{[\rname{txf}]}]{\conf{m{::}M,\chain} \leadsto \conf{M,\chain}}
 {
 	\begin{array}{c}
-	m = (\gstate,\textit{addr})~~~\gstate.\textbf{msg} = (s,g,v,f,\bar{a})~~~ \chain(\textit{addr}) = (\mathcal{C},\lstate)~~~\mathcal{C}(f,\bar{a}) = c\\
-	\chain_1 = \chain[s \stackrel{v}{\longrightarrow} \textit{addr}][s \subg g]~~~~~~~~
-	\cstate = (\lstate,\gstate,\chain_1,\textbf{false})\\
-	\conf{c,\cstate} \stackrel{*}{\leadsto} \conf{\textbf{throw},\cstate'}~~~~~~~
-	\chain' = \chain[s \addg \cstate'.\gstate.\textbf{gas}]
+	m = (\gstate,\textit{addr})~~~\gstate.\textbf{msg} = (s,v,f,\bar{a})~~~ \chain(\textit{addr}) = (\mathcal{C},\lstate)~~~\mathcal{C}(f,\bar{a}) = c\\
+	\chain_1 = \chain[s \stackrel{v}{\rightarrow} \textit{addr}]~~~~~
+	\cstate = (\lstate,\gstate,\chain_1,\textbf{false})~~~~~
+	\conf{c,\cstate} \stackrel{*}{\leadsto} \conf{\textbf{throw},\cstate'}
 	\end{array}
 }
 $$
 \caption{Transaction semantics}\label{fig:tx}
 \end{figure}
 
+\subsection{Notations for semantics}
+
+We first introduce several notations to help define the semantics.  A \emph{message} $m$ is a pair $(\gstate,\textit{addr})$ of the message state $\gstate$ and the receiver's address $\textit{addr}$. Here the message state $\gstate$ is represented by the quadruple $(s,v,f,\bar{a})$ that consists of the sender's address $s$, the Ether value $v$ of the transaction, the method id $f$ together with inputs $\bar{a}$ to be called at the receiver's address. A ledger $\chain$ is a finite mapping from addresses to pairs of contract code $\mathcal{C}$ and its state $\lstate$. The method's code in contract $\mathcal{C}$ can be accessed by providing the method id and its parameter, \emph{e.g} $\mathcal{C}(f,\bar{a})$. A transaction step $\stackrel{t}{\leadsto}$ relates two transaction configurations (t-config), \emph{e.g.} $\conf{M,\chain} \stackrel{t}{\leadsto} \conf{M',\chain'}$ where each t-config is a pair of message list and ledger. 
+
+At the contract level we have contract step $\leadsto$ that relates two contract configurations (c-config), \emph{e.g.} $\conf{\kappa,\cstate} \leadsto \conf{\kappa',\cstate'}$ where each c-config is a pair of \emph{activation record} $\kappa$ and \emph{transaction state} $\cstate$. The activation record $\kappa$ can be either a concrete value $v$, a statement $c$, a \emph{scoped statement} $\conf{c}$ (for bookkeeping the scopes of $\textbf{continue}$ and $\textbf{break}$), a pair of activation record and transaction state $\conf{\kappa',\gstate'}$ (for bookkeeping the scopes of function calls), an evaluating assignment $x:= \conf{\kappa',\gstate'}$, or a composition of two activation records $\kappa_1;\kappa_2$. An activation record $\kappa$ is \emph{final} if it is $\textbf{skip}$ or some concrete value $v$. For convenience, we use $\kappa_{\mathbb{F}}$ to represent final activation records. The transaction state $\cstate$ is expressed by the quadruple $(\lstate,\gstate,\chain,b)$ of contract state $\lstate$, message state $\gstate$, ledger $\chain$, and Boolean flag $b$ (for bookkeeping exception propagation).
+
+
+We also introduce several notations for updating the states. The action $\beta$ for a state $s$ (\emph{i.e.} ledger $\chain$, message $\gstate$, contract $\lstate$) is written as $s[\beta]$. Here action can be updating a variable, \emph{i.e.} $s[x \leftarrow v]$ means the variable $x$ in $s$ is updated with new value $v$. Or the action can be Ether transfer between two addresses, \emph{i.e.} $\chain[\textit{addr}_1 \stackrel{v}{\rightarrow} \textit{addr}_2]$ indicates the transfer of $v$ Ethers from $\textit{addr}_1$ to $\textit{addr}_2$. 
 
 \begin{figure}[t]
 \centering
