@@ -1,0 +1,235 @@
+% This is samplepaper.tex, a sample chapter demonstrating the
+% LLNCS macro package for Springer Computer Science proceedings;
+% Version 2.20 of 2017/10/04
+%
+\documentclass[runningheads]{llncs}
+%
+\input{solidity-highlighting.tex}
+
+\usepackage{graphicx}\usepackage{tikz,listings,proof}
+\usepackage{amssymb}
+\usepackage{stmaryrd}
+\usetikzlibrary{positioning,shapes,chains}
+\usetikzlibrary{shapes.multipart}
+\usetikzlibrary[calc]
+% Used for displaying a sample figure. If possible, figure files should
+% be included in EPS format.
+%
+% If you use the hyperref package, please uncomment the following line
+% to display URLs in blue roman font according to Springer's eBook style:
+% \renewcommand\UrlFont{\color{blue}\rmfamily}
+\newcommand{\nxt}{\succ}
+\newcommand{\revert}{\blacksquare}
+\newcommand{\ifs}[3]{\textbf{if}~#1~\textbf{then}~#2~\textbf{else}~#3}
+\newcommand{\whiles}[2]{\textbf{while}~#1~\textbf{do}~#2}
+\newcommand{\trans}{\triangleright}
+\newcommand{\rname}[1]{\textsc{#1}}
+\newcommand{\lstate}{\sigma}
+\newcommand{\gstate}{\mathtt{\Sigma}}
+\newcommand{\conf}[1]{\langle #1 \rangle}
+\newcommand{\eval}[1]{\llbracket #1 \rrbracket}
+\newcommand{\gas}{\mathcal{G}}
+\newcommand{\chain}{\mathbb{B}}
+\newcommand{\cstate}{\mathtt{\Gamma}}
+\newcommand{\subg}{\stackrel{\ominus}{\leftarrow}}
+\newcommand{\addg}{\stackrel{\oplus}{\leftarrow}}
+\newcommand{\trace}[2]{\mathsf{trace}(#1,#2)}
+\begin{document}
+%
+\title{Formal Specification for Detecting Vulnerabilities of Ethereum Smart Contracts}
+%
+%\titlerunning{Abbreviated paper title}
+% If the paper title is too long for the running head, you can set
+% an abbreviated paper title here
+%
+\author{}
+%
+\authorrunning{}
+% First names are abbreviated in the running head.
+% If there are more than two authors, 'et al.' is used.
+%
+%\institute{Princeton University, Princeton NJ 08544, USA \and
+%Springer Heidelberg, Tiergartenstr. 17, 69121 Heidelberg, Germany
+%\email{lncs@springer.com}\\
+%\url{http://www.springer.com/gp/computer-science/lncs} \and
+%ABC Institute, Rupert-Karls-University Heidelberg, Heidelberg, Germany\\
+%\email{\{abc,lncs\}@uni-heidelberg.de}}
+%
+\maketitle              % typeset the header of the contribution
+%
+\begin{abstract}
+The task of detecting vulnerabilities in Ethereum smart contracts is critical as it protects smart-contract users from losing money due to adversarial exploitation. However, most vulnerabilities are described informally through their syntax rather than the harmful behaviors caused by them. Consequently, this gives rise to many false alarms for the tools that try to detect the bugs due to the mismatches in semantics. In this work, we propose a formal specification language for smart contracts that
+ precisely characterizes the vulnerable behaviors via both syntactic and semantics level. We then develop a framework that can verify whether a smart contract is susceptible to the respective vulnerable specification. To evaluate the framework, we implement a C++ tool and use it to detect vulnerabilities of smart contracts on the Ethereum platform.
+\keywords{First keyword  \and Second keyword \and Another keyword.}
+\end{abstract}
+
+\section{Introduction}
+
+\begin{figure}
+\begin{lstlisting}[language=Solidity]
+contract Money {
+ ...
+ function withdraw() {
+  assert (msg.sender.call.value(balances[msg.sender])());
+  balances[msg.sender] = 0;
+ }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=Solidity]
+contract Attacker {
+ ...
+ function() payable{
+  if (money.balance >= msg.value) {
+   money.withdraw();
+  }
+ }
+}
+\end{lstlisting}
+\caption{Example of reentrancy attack.}\label{fig:ex1}
+\end{figure}
+
+Consider the Solidity function in Fig.~\ref{fig:ex1} in which the sender attempts to withdraw his Ethers recorded in $\texttt{balances[{\color{violet}msg.sender}]}$. The function first tries to conduct the transfer at line 2 in which an Ether amount of $\texttt{balances[{\color{violet}msg.sender}]}$ is sent to the address of the sender, ${\color{violet} \texttt{msg.sender}}$. If the transfer fails (\emph{e.g.} due to insufficient gas) then the transaction is reverted as shown at line 3. Otherwise it is successful and \texttt{balances[{\color{violet}msg.sender}]}---the balance of the sender---is set to 0 at line 4. 
+
+This contract is exposed to the reentrancy attack as the attacker can invoke $\texttt{withdraw}$ multiple times before his balance is set to 0, therefore allows him to withdraw more Ethers than he should. To see why, note that the $\color{blue}\texttt{call}$ function (line 2) also activates the fallback function of $\texttt{msg.sender}$. This allows him to call $\texttt{withdraw}$ from $\texttt{Money}$ contract again as long as the condition $\texttt{money.balance >= msg.value}$ is still satisfiable. Consequently, the Ethers in $\texttt{Money}$ are drained in just a single transaction.
+
+To see how our technique can detect such vulnerability , let 
+\\
+$$P = \texttt{msg.sender.call.value(balances[msg.sender])()}$$
+$$
+a = \texttt{throw}~~~~b = \texttt{balances[msg.sender] = 0}
+$$
+
+then the function $\texttt{withdraw}$ can be transformed into the following trace set:
+$$
+T = \mathcal{F}[\textbf{assert}(P)[\textbf{assert}(Q) \cdot \mathcal{F}[T_1]+\textbf{assert}(!Q)] \cdot a]
+$$
+where $T_1 = \textbf{assert}(P)[\textbf{assert}(Q) \cdot \mathcal{F}+\textbf{assert}(!Q)] \cdot a$. On the other hand, the reentrancy bug is expressed by the following trace:
+$$
+t = \mathcal{F}[t_1 \cdot \{R_1\}c[t_2 \cdot \mathcal{F}[t_3] \cdot t_4]\{R_2\} \cdot t_5]
+$$
+where  $t_i$ is trace variable and  $c$ is a basic statement that contains $\textbf{call}$ function. To check whether $\textbf{withdraw}$ is vulnerable under reentrancy, we check whether the word equation $t = T$ has a solution. Indeed, one solution is $t_1 = \epsilon$, $c = \textbf{assert}(P)$, $t_2 = \textbf{assert}(Q)$, $t_3 = \textbf{assert}(P)[\textbf{assert}(!Q)] \cdot a$, $t_4 = \epsilon$, $t_5 = a$. Put everything together, we arrive at:
+$$
+t' = \mathcal{F}[\textbf{assert}(P)[\textbf{assert}(Q) \cdot \{R_1\}\mathcal{F}[\textbf{assert}(P)[\textbf{assert}(!Q)] \cdot a\{R_2\}]] \cdot a]
+$$
+
+We then checking whether the above trace is satisfiable. This can be done by checking the following SAT constraint:
+\\
+\\
+Initial condition:
+$$
+\texttt{msg.sender0} = \texttt{attacker}
+$$
+\textbf{assert}(P):
+$$
+\texttt{money.balance1} = \texttt{money.balance0} - \texttt{balances[msg.sender0]}
+$$
+$$
+\texttt{msg.sender.balance1} =  \texttt{msg.sender.balance0} + \texttt{balances[msg.sender0]}
+$$
+$$
+\texttt{msg.value1} = \texttt{balances[msg.sender0]}
+~~~~~
+\texttt{msg.sender1} = \texttt{money}
+$$
+\textbf{assert}(Q):
+$$
+\texttt{money.balance}_1 >= \texttt{msg.value}_1
+$$
+$\{R_1\}$:
+$$
+\texttt{money.balance}_1 = \texttt{a}  > 0
+$$
+\textbf{assert}(P) (inner):
+$$
+\texttt{money.balance}_2 = \texttt{money.balance}_1 - \texttt{balances[msg.sender]}_0
+$$
+$$
+\texttt{msg.sender.balance}_2 =  \texttt{msg.sender.balance}_1 + \texttt{balances[msg.sender]}_0
+$$
+$$
+\texttt{msg.value}_2 = \texttt{balances[msg.sender]}_0~~~~~~
+\texttt{msg.sender}_2 = \texttt{money}
+$$
+\textbf{assert}(!Q):
+$$
+\texttt{money.balance}_2 < \texttt{msg.value}_2
+$$
+$a:$
+$$
+\texttt{balances[msg.sender]}_1 = 0
+$$
+$\{R_2\}$:
+$$
+\texttt{money.balance}_2 < \texttt{a}
+$$
+$$
+\texttt{msg.sender3} = \texttt{attacker}
+$$
+$a:$
+$$
+\texttt{balances[msg.sender3]} = 0
+$$
+
+
+
+\section{Formalism of traces}
+
+\begin{definition}
+A trace set $T$ is called a $n$-approximation of a program $c$ if $c\triangleright_{n}T$ where the relation $\triangleright_{n}$ is defined as:
+$$
+\infer[{[\rname{base}]}]{c \trans_{n} c}{
+	\begin{array}{c}
+	\textsf{primitive}(c)
+	\end{array}}
+~~~~~
+\infer[{[\rname{if}]}]{\ifs{b}{c_1}{c_2} \trans_{n} \textbf{assert}(b);t_1+\textbf{assert}(!b);t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
+$$
+$$
+\infer[{[\rname{while}]}]{\whiles{b}{c} \trans_{n} (\textbf{assert}(b);t)^*;\textbf{assert}(!b)}{c \trans_{n} t}
+~~~~~~
+\infer[{[\rname{seq}]}]{c_1;c_2 \trans_{n} t_1 ; t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
+$$
+$$
+\infer[{[\rname{limit}]}]{c_f \trans_{0} c_f}{}~~~~~
+\infer[{[\rname{scope}]}]{c_f \trans_{n} c_f[t]}{n > 0~~\textsf{lookup}(c_f) = c~~~c \trans_{n-1} t}
+$$	
+\end{definition}
+
+\begin{proposition}
+	The relation $\triangleright$ satisfies the following properties:
+	\begin{enumerate}
+		\item $\triangleright_n$ is functional:
+		$$
+		\forall T_1,T_2.~c \triangleright_n T_1 \Rightarrow c \triangleright_n T_2 \Rightarrow T_1 = T_2
+		$$
+		\item \textbf{Soundness}: If $c \triangleright_n T$, $t \in T$, $\conf{t,\cstate} \stackrel{*}{\leadsto} \conf{c_{\mathbb{F}},\cstate'}$ then $\conf{c,\cstate} \stackrel{*}{\leadsto} \conf{c_{\mathbb{F}},\cstate'}$.
+		\item \textbf{Completeness}: If $\conf{c,\cstate} \stackrel{*}{\leadsto} \conf{c_{\mathbb{F}},\cstate'}$ then there exist $n$, $t$, $T$ s.t.:
+		$$c \triangleright_n T \wedge t \in T \wedge \conf{t,\cstate} \stackrel{*}{\leadsto} \conf{c_{\mathbb{F}},\cstate'}$$
+	\end{enumerate}
+	\end{proposition}
+\begin{definition}
+	A trace $t$ is concrete if every $c_f$ of it has a scope. A trace $t$ is abstract if it contains variables or guarded conditions.
+	\end{definition}
+
+\begin{definition}
+	$\eval{c} = \{c\}$, $\eval{t_1+t_2} = \eval{t_1} \cup \eval{t_2}$, $\eval{t^*} = \bigcup_{i=0}^\infty \eval{t^i}$, $\eval{c_f[t]} = \{c_f\} \cup \{c_f[s] \textrm{ s.t. } s \in \eval{t}\}$, $\eval{t_1 \cdot t_2} = \{s_1 \cdot s_2 \textrm{ s.t. } s_1 \in \eval{t_1} \wedge s_2 \in \eval{t_2}\}$ 
+	\end{definition}
+
+
+
+\section{Specification language}
+\input{spec.tex}
+
+\section{Verification framework}
+\input{framework.tex}
+
+\section{Implementation}
+
+\section{Evaluation}
+
+\section{Related work}
+
+\section{Conclusion}
+
+\end{document}

@@ -1,0 +1,313 @@
+\subsection{The language}
+$
+\begin{array}{lcl}
+	c&::=~&\textit{basic}~|~c;c~|~\ifs{b}{c}{c}~|~\whiles{b}{c}~|~\textbf{continue}~|~\textbf{break}~|~\\
+	&& \textbf{assert}(b)~|~\textbf{require}(b)~|~\textbf{throw}~|~\textbf{return}~ e\\
+	&&\textit{addr}.\textbf{send}(e)~|~\textit{addr}.\textbf{transfer}(e)~|~\textit{addr}.\textbf{call}(g,e).f(\bar{e}) \\
+	e&::=~&\textit{const}~|~\textit{var}~|~\overline{\textit{symbol}}~|~\textbf{gas}~|~\textbf{bal}~|~ \textbf{stp}~|~\textbf{blk}~|~\\
+	&~&e + e~|~ e - e~|~ e \times e ~|~ e~\textbf{div}~e~|~ e~\textbf{mod}~e\\
+	b&::=~&\textbf{true}~|~\textbf{false}~|~\textbf{owned}~|~ e = e~|~ e < e~|~\ldots ~|~ !b~|~ b \&\& b  ~|~ b || b\\
+	P&::=~&\top~|~\bot~|~ e = e~|~ e < e~|~ \neg P~|~P \wedge P ~|~ P \vee P ~|~ \exists x.~P~|~ \forall x.~P\\
+	t&::=~&a~|~T~|~\mathcal{X}.f~|~\{P\}t~|~t\{P\}~|~\mathcal{F}[t]~|~t \nxt t~|~t+t~|~t^*~|~ t \wedge t\\
+	\kappa&::=&v~|~e~|~b~|~c~|~\conf{\kappa}~|~\conf{\kappa,\cstate}~|~\kappa ; \kappa
+\end{array}
+$
+\subsection{Vulnerabilities}
+
+
+Note: we don't support cross-transaction traces, \emph{i.e.} traces with functions executed in different transactions. Need an invariant for state that says "all variables's values are the same", can simply over-approximate to variables in the functions.
+\begin{enumerate}
+	\item Integer overflow/underflow:
+	$$
+	\mathcal{F}[T_1 \nxt a\{x < \textit{Int}_\textit{min}\} \nxt T_2]~~~~~~~~\mathcal{F}[T_1 \nxt a\{x > \textit{Int}_\textit{max}\} \nxt T_2]
+	$$
+	where $a \in \{e:= e + e, e:= e - e, e:= e \times e, e:= e~\textbf{div}~e\}$
+	\item Gasless send:
+	$$
+	\mathcal{F}[T_1  \nxt \mathcal{X}.a.()[T_2\{\textbf{gas} < 0\}] \nxt T_3]
+	$$
+	
+	where $a \in \{\textit{send},\textit{transfer},\textit{call}\}$
+	\item Reentrancy:
+	$$
+	\mathcal{F}[\{\textbf{bal} = \overline{a_0}\}T_1 \nxt \mathcal{X}.a.()[T_2 \nxt  \mathcal{F}[T\{\textbf{bal} < \overline{a_0}]\} \nxt T_3] \nxt T_4]
+	$$
+	
+	where $a \in \{\textit{send},\textit{transfer},\textit{call}\}$
+	
+	\item Suicide contracts:
+	$$
+	\mathcal{F}[\{\textbf{owned}\}T_1 \nxt \textbf{selfdestruct(owner)} \nxt T_2]
+	$$
+	
+	\item Time-stamp dependency:
+	$$
+	\mathcal{F}[\{\textbf{stp} = \overline{t_1} \wedge x = \overline{x_0}\} T \{x = \overline{x_1}\}] \wedge \mathcal{F}[\{\textbf{stp} = \overline{t_2} \wedge x = \overline{x_0}\} T \{x = \overline{x_2}\}]
+	$$
+	
+	where $t_1 \neq t_2$ and $x_1 \neq x_2$
+	\item Block dependency:
+	$$
+	\mathcal{F}[\{\textbf{blk} = \overline{b_1} \wedge x = \overline{x_0}\} T \{x = \overline{x_1}\}] \wedge \mathcal{F}[\{\textbf{blk} = \overline{b_2} \wedge x = \overline{x_0}\} T \{x = \overline{x_2}\}]
+	$$
+	
+	where $b_1 \neq b_2$ and $x_1 \neq x_2$
+	
+	
+	\item Transaction ordering dependency:
+	$$
+	\{x = \overline{x_0}\}\mathcal{F}_1 \nxt \mathcal{F}_2\{x = \overline{x_1}\} \wedge \{x = \overline{x_0}\}\mathcal{F}_2  \nxt \mathcal{F}_1 \{x = \overline{x_2}\}
+	$$
+	
+	where $x_1 \neq x_2$
+\end{enumerate}
+
+Let $\lstate$ be the local state and $\gstate$ be the global state. A local configuration is the tuple $\conf{c,\lstate,\gstate}$ of statement, local state and global state. A small step is a binary between two configurations: $\conf{c,\lstate,\gstate} \leadsto \conf{c',\lstate',\gstate'}$. We provide the following sequential operational semantics where $\cstate = \conf{\lstate,\gstate,\chain,\textbf{call}}$:
+$$
+\infer[{[\rname{skip}]}]{\conf{c;c',\cstate} \leadsto \conf{c',\cstate}}{c \in \mathbb{V} \cup \{\textbf{skip}\}}
+~~~
+\infer[{[\rname{err}]}]{\conf{c,\cstate} \leadsto \conf{\textbf{throw},\cstate}}{\textit{error}}
+~~~
+\infer[{[\rname{asn}]}]
+{\conf{x:=e,\cstate} \leadsto \conf{x:=e',\cstate'}}{
+\begin{array}{c}
+\eval{e}_{\cstate} = (v,\cstate_1)
+\\
+\cstate' = \cstate_1[\lstate_1.x \leftarrow v][\gstate.\textbf{gas} \subg \gas(:=)]
+\end{array}}	
+$$
+
+$$
+\infer[{[\rname{if}_\top]}]{\conf{\ifs{b}{c_1}{c_2},\cstate} \leadsto \conf{c_1,\cstate'}}
+{
+	\begin{array}{c}
+	\eval{b}_{\cstate} = (\textbf{true},\cstate_1)\\
+	\cstate' = \cstate_1[\gstate.\textbf{gas} \subg \gas(\textbf{if})]
+	\end{array}
+}	
+~~~~~
+\infer[{[\rname{if}_\bot]}]{\conf{\ifs{b}{c_1}{c_2},\cstate} \leadsto \conf{c_2,\cstate'}}
+{
+	\begin{array}{c}
+	\eval{b}_{\cstate} = (\textbf{false},\cstate_1)\\
+	\cstate' = \cstate_1[\gstate.\textbf{gas} \subg \gas(\textbf{if})]
+	\end{array}
+}	
+$$
+
+$$
+\infer[{[\rname{wh}_\top]}]
+{
+	\begin{array}{l}
+	\conf{\whiles{\textbf{true}}{c},\cstate} \leadsto
+	\\
+	 \conf{\conf{c};\whiles{b}{c},\cstate'}
+	\end{array}
+}
+{
+	\begin{array}{c}
+	\eval{b}_{\cstate} = (\textbf{true},\cstate_1)\\
+	\cstate' = \cstate_1[\gstate.\textbf{gas} \subg \gas(\textbf{while})]
+	\end{array}
+	}
+~~~~~
+\infer[{[\rname{wh}_\bot]}]
+{
+	\begin{array}{l}
+	\conf{\whiles{b}{c},\cstate} \leadsto
+	 \conf{\textbf{skip},\cstate'}
+	\end{array}
+}
+{
+	\begin{array}{c}
+	\eval{b}_{\cstate} = (\textbf{false},\cstate_1)\\
+	\cstate' = \cstate_1[\gstate.\textbf{gas} \subg \gas(\textbf{while})]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{seq}]}]{\conf{c_1;c_2,\cstate} \leadsto \conf{c'_1;c_2,\cstate'}}{\conf{c_1,\cstate} \leadsto \conf{c'_1,\cstate'}}
+~~~
+\infer[{[\rname{in}]}]{\conf{\conf{c_1;c_2},\cstate} \leadsto \conf{\conf{c_1';c_2},\cstate'}}
+{
+	\begin{array}{c}
+		c_1 \not \in \{\textbf{continue},\textbf{break}\}
+		\\
+		\conf{c_1,\cstate} \leadsto \conf{c_1',\cstate'}
+	\end{array}
+}
+~~~
+\infer[{[\rname{out}]}]{\conf{\conf{c},\cstate} \leadsto \conf{c,\cstate}}{ c \in \mathbb{V} \cup \{\textbf{skip}\}}
+$$
+
+$$
+~~~~\infer[{[\rname{ckS}]}]{\conf{c(b),\cstate} \leadsto \conf{\textbf{skip},\cstate'}}{
+	\begin{array}{c}
+		c \in \{\textbf{require},\textbf{assert}\}~~~\eval{b}_{\cstate} = \top\\
+		\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(c(b),\cstate)]
+	\end{array}
+}
+~~~
+\infer[{[\rname{ckU}]}]{\conf{c(b),\cstate} \leadsto \conf{\textbf{throw},\cstate'}}{
+	\begin{array}{c}
+c \in \{\textbf{require},\textbf{assert}\}~~~\eval{b}_{\cstate} = \bot\\
+\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(c(b),\cstate)]
+\end{array}}
+$$
+
+
+$$
+\infer[{[\rname{triv}]}]{\conf{c,\cstate} \leadsto \conf{\textbf{skip},\cstate'}}
+{ \begin{array}{c}
+		c \in \{\textbf{continue},\textbf{break}\}\\
+		\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(c,\cstate)]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{cont}]}]{\conf{\conf{\textbf{continue};c},\cstate} \leadsto \conf{\textbf{skip},\cstate'}}{
+\begin{array}{c}
+\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(\textbf{continue},\cstate)]
+\end{array}}
+$$
+
+$$
+\infer[{[\rname{brk}]}]{\conf{\conf{\textbf{brk};c};\whiles{b}{c'},\cstate} \leadsto \conf{\textbf{skip},\cstate'}}{
+\begin{array}{c}
+\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(\textbf{break},\cstate)]
+\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{fun}]}]{\conf{\textit{addr}.f(\bar{v}),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
+{
+	\begin{array}{c}	
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)~~~~\mathcal{C}_f(f,\eval{\bar{v}}_{\cstate}) = c_f~~~~
+	\cstate' = \cstate[\gstate.\textbf{gas}  \leftarrow 0]
+	\\
+	\cstate_f = \cstate[\lstate \leftarrow \lstate_f][\gstate.\textbf{gas} \subg \gas(\textit{addr}.f(\bar{v}),\cstate)][\textbf{call} \leftarrow \textbf{false}]
+\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{call}]}]{\conf{\textit{addr}.\textbf{call}(f,\bar{v}).\textbf{value}(e).\textbf{gas}(g_f),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
+{
+	\begin{array}{c}	
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)~~~~\mathcal{C}_f(f,\eval{\bar{v}}_{\cstate}) = c_f
+	\\
+	\cstate_1 = \cstate[\gstate.\textbf{msg}.\textbf{sender} \leftarrow \lstate.\textbf{id}][\gstate.\textbf{msg}.\textbf{value} \leftarrow \eval{e}_{\cstate}][\gstate.\textbf{gas} \leftarrow g_f]
+	\\
+	\cstate_f = \cstate_2[\chain(\lstate.\textbf{id}) \stackrel{\eval{e}_{\cstate}}{\rightarrow} \chain(\textit{addr})][\lstate \leftarrow \lstate_f][\textbf{call} \leftarrow \textbf{true}]
+	\\
+	\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(\textit{addr}.\textbf{call}(f,\bar{v}).\textbf{value}(\eval{e}_\cstate).\textbf{gas}(g_f),\cstate)]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{tf}]}]{\conf{\textit{addr}.\textbf{transfer}(e),\cstate} \leadsto \conf{\conf{(),\cstate_f},\cstate'}}
+{
+	\begin{array}{c}	
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)~~~~\mathcal{C}_f(f,\eval{\bar{v}}_{\cstate}) = c_f
+	\\
+	\cstate_1 = \cstate[\gstate.\textbf{msg}.\textbf{sender} \leftarrow \lstate.\textbf{id}][\gstate.\textbf{msg}.\textbf{value} \leftarrow \eval{e}_{\cstate}][\gstate.\textbf{gas} \leftarrow 2300]
+	\\
+	\cstate_f = \cstate_1[\chain(\lstate.\textbf{id}) \stackrel{\eval{e}_\cstate}{\rightarrow} \chain(\textit{addr})][\lstate \leftarrow \lstate_f][\textbf{call} \leftarrow \textbf{false}]
+	\\
+	\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(\textit{addr}.\textbf{transfer}(\eval{e}_\cstate),\cstate)]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{dcall}]}]{\conf{\textit{addr}.\textbf{delegatecall}(f,\bar{v}).\textbf{gas}(g_f),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
+{
+	\begin{array}{c}	
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)~~~~\mathcal{C}_f(f,\eval{\bar{v}}_{\cstate}) = c_f
+	\\
+	\cstate_f = \cstate[\gstate.\textbf{gas} \leftarrow g_f][\textbf{call} \leftarrow \textbf{true}]
+	\\
+	\cstate' = \cstate[\gstate.\textbf{gas} \subg \gas(\textit{addr}.\textbf{delegatecall}(f,\bar{v}).\textbf{gas}(g_f),\cstate)]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{funR}]}]{\conf{\conf{c_f,\cstate_f},\cstate} \leadsto \conf{\conf{c_f',\cstate_f'},\cstate}}
+{
+	\begin{array}{c}	
+	 \conf{c_f,\cstate_f} \leadsto \conf{c_f',\cstate_f'}
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{callS}]}]{\conf{\conf{c,\cstate_f},\cstate} \leadsto \conf{\textbf{true},\cstate'}}
+{
+	\begin{array}{c}
+	c \in \mathbb{V} \cup \{\textbf{skip}\}	~~~~~ \cstate.\textbf{call} = \textbf{true}~~~~~
+	\cstate_f.\chain(\cstate_f.\lstate.\textbf{id}) = (\mathcal{C}_f,\lstate_\textit{old})\\
+	\cstate' = \cstate[\chain \leftarrow \cstate_f.\chain][\chain(\cstate_f.\lstate.\textbf{id}) \stackrel{p}{\leftarrow} (\mathcal{C}_f,\cstate_f.\lstate)][\gstate.\textbf{gas} \addg g_f]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{funS}]}]{\conf{\conf{c,\cstate_f},\cstate} \leadsto \conf{c,\cstate'}}
+{
+	\begin{array}{c}
+	c \in \mathbb{V} \cup \{\textbf{skip}\}	~~~~~ \cstate.\textbf{call} = \textbf{false}~~~~~
+	\cstate_f.\chain(\cstate_f.\lstate.\textbf{id}) = (\mathcal{C}_f,\lstate_\textit{old})\\
+	\cstate' = \cstate[\chain \leftarrow \cstate_f.\chain][\chain(\cstate_f.\lstate.\textbf{id}) \stackrel{p}{\leftarrow} (\mathcal{C}_f,\cstate_f.\lstate)][\gstate.\textbf{gas} \addg g_f]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{callF}]}]{\conf{\conf{\textbf{throw},\cstate_f},\cstate} \leadsto \conf{\textbf{false},\cstate'}}
+{
+	\begin{array}{c}	
+	\cstate.\textbf{call} = \textbf{true}~~~\cstate' = \cstate[\gstate.\textbf{gas} \addg g_f]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{funF}]}]{\conf{\conf{\textbf{throw},\cstate_f},\cstate} \leadsto \conf{\textbf{throw},\cstate'}}
+{
+	\begin{array}{c}	
+	\cstate.\textbf{call} = \textbf{false}~~~\cstate' = \cstate[\gstate.\textbf{gas} \addg g_f]
+	\end{array}
+}
+$$
+
+$$
+\infer[{[\rname{send}]}]{\conf{\textit{addr}.\textbf{send}(e),\cstate} \leadsto \conf{\textit{addr}.\textbf{call}((),\_).\textbf{value}(e).\textbf{gas}(2300),\cstate}}
+{
+}
+$$
+
+$$
+\infer[{[\rname{return}]}]{\conf{\textbf{return}~e;c, \cstate} \leadsto \conf{v,\cstate}}{\eval{e}_\cstate  = v}
+$$
+
+$$
+\infer[{[\rname{kill}]}]{\conf{\textbf{selfdestruct}(\textit{addr}),\cstate} \leadsto \conf{\textbf{skip},\cstate'}}{e = \cstate.\lstate.\textbf{bal}~~~\cstate' = \cstate[\chain(\lstate.\textbf{id}) \stackrel{e}{\rightarrow}  \chain(\textit{addr})][\chain(\lstate.\textbf{id}) \leftarrow \textbf{None}]}
+$$
+
+Evaluation:
+
+$\eval{f}_{\cstate} := e \in \mathbb{V}$ where $\conf{f,\cstate} \stackrel{*}{\leadsto} \conf{e,\cstate'}$
+
+
+
+Note that $\gas(c,\lstate,\gstate)$ is a partial function and only works if $\gstate.\textbf{gas} \geq 0$. We don't model msg.sig and msg.data as they are measured in bytes which is not meaningful for high-level reasoning. We also assume that delegatecall will either return true or false which is similar to normal call.
+\subsection{Semantics}
+
+Let 
+
+\subsection{Examples}
