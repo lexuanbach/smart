@@ -1,42 +1,61 @@
-\subsection{The language}
+\subsection{A light-weight language for Solidity}
 \begin{figure}
 $
 \begin{array}{lcl}
-\textit{msg}&::=~&\textbf{msg}.\textbf{sender}~|~\ldots~|~\textbf{block}.\textbf{number}~|~\ldots~|~\textbf{now}~|~\textbf{tx}.\textbf{gasprice}~|~\textbf{tx.origin}\\
-e&::=~&\textit{msg}~|~\mathbb{Z}~|~\textit{var}~|~\textbf{address}~|~\textbf{balance}~|~c_f~|~\textit{arr}[e]~|~\textit{arr}.\textbf{length}~|~e + e~|~ \ldots\\
-b&::=~&\textbf{true}~|~\textbf{false}~|~c_f~|~ e = e~|~ e < e~|~e \leq e ~|~ !b~|~ b \&\& b  ~|~ b || b
+\textit{msg}&::=~&\textbf{msg}.\textbf{sender}~|~\textbf{msg.value}~|~\textbf{block}.\textbf{number}~|~\textbf{now}~|~\textbf{tx.origin}\\
+e&::=~&\textit{msg}~|~\mathbb{Z}~|~\textit{var}~|~\textbf{this}~|~\textit{addr}.\textbf{balance}~|~a[e]~|~a.\textbf{length}~|~e + e~|~ \ldots\\
+b&::=~&\textbf{true}~|~\textbf{false}~|~ e = e~|~ e < e ~|~ !b~|~ b \&\& b  ~|~ b || b
 \\
-c_b&::=~&\textit{primitive}~|~\textbf{continue}~|~\textbf{break}~|~\textbf{return}~e~|~\textbf{assert}(b)~|~\textbf{require}(b)~|~\textbf{throw}\\
-c_f&::=~&f(\bar{e})~|~\textit{addr}.f(\bar{e})~|~\textit{addr}.\textbf{call}(f,\bar{e}).\textbf{gas}(e_g).\textbf{value}(e_v)~|~\\
-&&\textit{addr}.\textbf{delegatecall}(f,\bar{e}).\textbf{gas}(e_g)~|~\textit{addr}.\textbf{send}(e)~|~\textit{addr}.\textbf{transfer}(e)\\
-c&::=~&c_b~|~c_f~|~c;c~|~\ifs{b}{c}{c}~|~\whiles{b}{c}
+c_f&::=~&f(\bar{e})~|~\textit{addr}.f(\bar{e})~|~\textit{addr}.\textbf{call}(f,\bar{e}).\textbf{value}(e)~|~
+\\
+&&\textit{addr}.\textbf{delegatecall}(f,\bar{e})~|~\textit{addr}.\textbf{send}(e)~|~\textit{addr}.\textbf{transfer}(e)
+\\
+\textit{exp}&::=~& e~|~b~|~c_f
+\\
+c_p&::=~&\textbf{skip}~|~x:=\textit{exp}~|~\textbf{continue}~|~\textbf{break}~|~\textbf{return}~e~|~
+\textbf{assert}(\textit{exp})~|~\textbf{throw}
+\\
+c&::=~&c_p~|~c_f~|~c;c~|~\ifs{b}{c}{c}~|~\whiles{b}{c}
 \end{array}
 $
 \caption{A light-weight language for Solidity}\label{fig:lang}
 \end{figure}
 
 
-We adopt the light-weight language in Fig.~\ref{fig:lang} to specify Solidity functions. The first constructor $\textit{msg}$ contains transaction global variables such as $\textbf{msg.sender}$---the address of the sender, $\textbf{block.number}$---the transaction's block number, or $\textbf{now}$---the transaction's time stamp, \emph{etc}. The constructor $e$ captures the syntax for arithmetic expressions including $\textit{msg}$, integers $\mathbb{Z}$, variables $\textit{var}$, the \textbf{address} and \textbf{balance} of the current contract, function call $c_f$, together with standard arithmetic operations. Similarly, the constructor $b$ is for writing Boolean expressions such as truth values $\{\textbf{true},\textbf{false}\}$, function call $c_f$, array access $\textit{arr}[e]$ and its length $\textit{arr}.\textbf{length}$, expression comparisons $\{e=e,e < e,e \leq e\}$, together with Boolean connectives $\{!,\&\&,||\}$. 
+We adopt the light-weight language in Fig.~\ref{fig:lang} for writing Solidity contracts. In detail, we have the constructor $\textit{msg}$ for global variables such as $\textbf{msg.sender}$---the address of the sender, $\textbf{msg.value}$---the value of the transaction, $\textbf{block.number}$---the current block number, $\textbf{now}$---the current timestamp, and $\textbf{tx.origin}$---the address of the original sender. We use $e$ to write normal expressions, including $\textit{msg}$, integers $\mathbb{Z}$, variables $\textit{var}$,  \textbf{this}---the address of the current contract, \textit{addr}.\textbf{balance}--- the balance of address \textit{addr}, function call $c_f$, array expressions $a[e]$ for index  and $a.\textbf{length}$ for length, together with standard arithmetic operations. On the other hand, we have $b$ for writing standard  Boolean expressions. For simplicity, we assume that our variables only have the following types: address, integer, Boolean and their array counterparts.
 
 
-Next we have $c_b$ for basic statements such as primitive commands (\textbf{skip}, assignment $x:=e$, \ldots), flow control $\{\textbf{continue},\textbf{break},\textbf{return}\}$,  error check $\{\textbf{assert},\textbf{require}\}$, and exception raise $\textbf{throw}$. The constructor $c_f$ is for function calls such as internal call $f(\bar{e})$ and external call $\textit{addr}.f(\bar{e})$ where $\textit{addr}$ is the external contract's address, $f$ is the function id, and $\bar{e}$ is the argument list. For external calls, the fallback function is executed by default if no function can match the signature $(f,\bar{e})$. Here fallback is a special function in Solidity contracts that has no name and receives no argument. Another external calls is $\textit{addr}.\textbf{call}(f,\bar{e}).\textbf{gas}(e_g).\textbf{value}(e_v)$ which is low-level. By design, low-level calls in Solidity do not propagate exceptions or return values to their callers, instead a Boolean value is returned in which $\textbf{false}$ is equivalent to the occurrence of an exception. When the above $\textbf{call}$ is executed, the current contract sends an amount of $e_v$ Ether to address $\textit{addr}$. At the same time, it also provides a gas stipend of $e_g$ Ether to execute the function $f$ at $\textit{addr}$ with arguments $\bar{e}$. On the other hand, the low-level external call $\textit{addr}.\textbf{delegatecall}(f,\bar{e}).\textbf{gas}(e_g)$ possesses similar behaviors as $\textbf{call}$ except there is no context switching between the caller and the callee. This means the function $f$ is executed in the current contract's context instead of the $\textit{addr}$'s context, thus the field $\textbf{value}$ is redundant and omitted.  The two statements $\textit{addr}.\textbf{send}(e)$ and $\textit{addr}.\textbf{transfer}(e)$ behave similarly as both send an amount of $e$ Ether to address $\textit{addr}$, together with a gas stipend of $2300$ wei to execute the fallback function at address  $\textit{addr}$. However, $\textbf{send}$ is low-level and thus it cannot propagate exceptions like $\textbf{transfer}$.  Finally, we have constructor $c$ for general statements which consists of basic statements $c_b$, function calls $c_f$, composition $c;c$, conditional statement $\ifs{b}{c}{c}$, and while loop $\whiles{b}{c}$.
+The statement constructor $c$ consists of $c_p$ for primitive statements, $c_f$ for function calls, $c;c$ for sequential statements, \textbf{if}-\textbf{else} for conditional statement, and \textbf{while} for loop.  Here primitive statements $c_p$ can be \textbf{skip} (doing nothing), $:=$ for assignment, $\{\textbf{continue},\textbf{break},\textbf{return}\}$ for control flow, $\textbf{assert}$ for checking assertions, and $\textbf{throw}$ for raising exceptions. Meanwhile, functional call $c_f$ contains the normal internal call $f(\bar{e})$ and external call $\textit{addr}.f(\bar{e})$ where $\textit{addr}$ is the callee address, $f$ is the function id, and $\bar{e}$ is the argument list. In addition, $c_f$ also supports other Solidity external calls such as $\textit{addr}.\textbf{call}(f,\bar{e}).\textbf{value}(e)$ that can send $e$ Ethers while invoking the function $f(\bar{e})$ at $\textit{addr}$---the callee address,  $\textit{addr}.\textbf{delegatecall}(f,\bar{e})$ for library calls, or $\textit{addr}.\textbf{transfer}(e)$ and $\textit{addr}.\textbf{send}(e)$ for sending $e$ Ethers to address $\textit{addr}$. The semantics of our language will be elaborated in CITE.
+\hide{
+. For external calls, the fallback function is executed by default if no function can match the signature $(f,\bar{e})$. Here fallback is a special function in Solidity contracts that has no name and receives no argument. Another external calls is $\textit{addr}.\textbf{call}(f,\bar{e}).\textbf{gas}(e_g).\textbf{value}(e_v)$ which is low-level. By design, low-level calls in Solidity do not propagate exceptions or return values to their callers, instead a Boolean value is returned in which $\textbf{false}$ is equivalent to the occurrence of an exception. When the above $\textbf{call}$ is executed, the current contract sends an amount of $e_v$ Ether to address $\textit{addr}$. At the same time, it also provides a gas stipend of $e_g$ Ether to execute the function $f$ at $\textit{addr}$ with arguments $\bar{e}$. On the other hand, the low-level external call $\textit{addr}.\textbf{delegatecall}(f,\bar{e}).\textbf{gas}(e_g)$ possesses similar behaviors as $\textbf{call}$ except there is no context switching between the caller and the callee. This means the function $f$ is executed in the current contract's context instead of the $\textit{addr}$'s context, thus the field $\textbf{value}$ is redundant and omitted.  The two statements $\textit{addr}.\textbf{send}(e)$ and $\textit{addr}.\textbf{transfer}(e)$ behave similarly as both send an amount of $e$ Ether to address $\textit{addr}$, together with a gas stipend of $2300$ wei to execute the fallback function at address  $\textit{addr}$. However, $\textbf{send}$ is low-level and thus it cannot propagate exceptions like $\textbf{transfer}$.  Finally, we have constructor $c$ for general statements which consists of basic statements $c_b$, function calls $c_f$, composition $c;c$, conditional statement $\ifs{b}{c}{c}$, and while loop $\whiles{b}{c}$.
 
 Note that we focus on the high-level semantics of Solidity and thus our light-weight language do not support the full spectrum of data types and structures in Solidity such as bytes, struct, object, String. For simplicity, we also exclude the statement $\textbf{for}(c_1;b;c_2)\{c\}$ from our language since it can be equivalently transformed into the while statement $c_1;\whiles{b}{\{c;c_2\}}$.
-\begin{figure}
+}
+
+
+\subsection{The trace language}
+
+We introduce the trace language in Fig.~\ref{fig:assert} to specifying vulnerabilities. The constructor $\textit{mod}$ specifies different types of function modifiers supported by Solidity. The syntax for predicate is provided in $P$ in which a predicate can be modifier $\textit{mod}$, Boolean expression $b$, or quantified with $\forall$ and $\exists$. Given these premises, the constructor $t$ for trace can be empty $\epsilon$, primitive statement $c_p$, function call $c_f$, guarded with pre-condition $\{P\}t$ or with post-condition $t\{P\}$. Also, trace can be $c[t]$---statement $c$ equipped with some `scope' $[t]$---where $t$ is the trace of the function call inside $c$. As a result, scoping statements are limited to normal function call $c_f[t]$, assignment of function call $x := c_f[t]$, and assertion of function call $\textbf{assert}(c_f)[t]$. Our trace constructor also supports standard string operators such as $\nxt$ for concatenation (similar to ;), $+$ for non-deterministic choice, and $*$ for repetition. The trace semantics is constructed directly from the Solidity semantics and will be elaborated in CITE.
+
+We now extend the trace language to contain trace variables $\bar{t}$.
+
+For convention, we say a trace $t$ is \emph{concrete} if every statement with function call has a scope. 
+
+
+\begin{figure}[t]
 $
 \begin{array}{lcl}
-\mathsf{e}&::=~&\overline{\textit{symbolic}}~|~\textit{const}~|~\textit{var}~|~c_f~|~\textit{id}.f(\bar{\textsf{e}})~|~\mathsf{e} + \mathsf{e}~|~ \mathsf{e} - \mathsf{e}~|~ \mathsf{e} \times \mathsf{e} ~|~ \mathsf{e}~\textbf{div}~\mathsf{e}~|~ \mathsf{e}~\textbf{mod}~\mathsf{e}\\
 \textit{mod}&::=~&\textsf{owned}~|~ \textsf{public}~|~\textsf{private}~|~\textsf{payable}~|~\textsf{pure}~|~\textsf{view}~|~\textsf{external}\\
-P&::=~&\textbf{true}~|~\textbf{false}~|~\textit{mod}~|~ \mathsf{e} = \mathsf{e}~|~ \mathsf{e} < \mathsf{e}~|~\ldots~|~!P~|~P \&\& P ~|~ P || P ~|~ \exists x.~P~|~ \forall x.~P\\
-t&::=~&c_{p}~|~c_f~|~\{P\}t~|~t\{P\}~|~c_f[t]~|~t \nxt t~|~t+t~|~t^*\\
-T&::=~&\emptyset~|~a~|~\{P\}T~|~T\{P\}~|~\overline{c_f}~|~\overline{c_f}[T]~|~T \nxt T~|~T\cup T~|~T \cap T ~|~T^*\\
-\kappa&::=~&v~|~c~|~\conf{\kappa}~|~\conf{\kappa,\cstate}~|~\kappa ; \kappa
+P&::=~&\textit{mod}~|~ b ~|~ \exists x.~P~|~ \forall x.~P\\
+t&::=~&\epsilon~|~c_{p}~|~c_f~|~\{P\}t~|~t\{P\}~|~c_f[t]~|~x:=c_f[t]~|~\textbf{assert}(c_f)[t]~|~t \nxt t~|~t+t~|~t^*
 \end{array}
 $
-\caption{Assertion language and trace definition}\label{fig:assert}
+\caption{The trace language}\label{fig:assert}
 \end{figure}
 
 \subsection{Vulnerabilities}
+
+Having described the trace syntax in CITE, we now take a close look on how to use this syntax to define vulnerabilities in Solidity contracts.
 
 
 Note: we don't support cross-transaction traces, \emph{i.e.} traces with functions executed in different transactions. Need an invariant for state that says "all variables's values are the same", can simply over-approximate to variables in the functions.
@@ -127,18 +146,18 @@ We first introduce several notations to help define the semantics.  A \emph{mess
 At the contract level we have contract step $\leadsto$ that relates two contract configurations (c-config), \emph{e.g.} $\conf{\kappa,\cstate} \leadsto \conf{\kappa',\cstate'}$ where each c-config is a pair of \emph{activation record} $\kappa$ and \emph{transaction state} $\cstate$. The activation record $\kappa$ can be either a concrete value $v$, a statement $c$, a \emph{scoped statement} $\conf{c}$ (for bookkeeping the scopes of $\textbf{continue}$ and $\textbf{break}$), a pair of activation record and transaction state $\conf{\kappa',\gstate'}$ (for bookkeeping the scopes of function calls), an evaluating assignment $x:= \conf{\kappa',\gstate'}$, or a composition of two activation records $\kappa_1;\kappa_2$. An activation record $\kappa$ is \emph{final} if it is $\textbf{skip}$ or some concrete value $v$. For convenience, we use $\kappa_{\mathbb{F}}$ to represent final activation records. The transaction state $\cstate$ is expressed by the quadruple $(\lstate,\gstate,\chain,b)$ of contract state $\lstate$, message state $\gstate$, ledger $\chain$, and Boolean flag $b$ (for bookkeeping exception propagation).
 
 
-We also introduce several notations for updating the states. The action $\beta$ for a state $s$ (\emph{i.e.} ledger $\chain$, message $\gstate$, contract $\lstate$) is written as $s[\beta]$. Here action can be updating a variable, \emph{i.e.} $s[x \leftarrow v]$ means the variable $x$ in $s$ is updated with new value $v$. Or the action can be Ether transfer between two addresses, \emph{i.e.} $\chain[\textit{addr}_1 \stackrel{v}{\rightarrow} \textit{addr}_2]$ indicates the transfer of $v$ Ethers from $\textit{addr}_1$ to $\textit{addr}_2$. 
+We also introduce several notations for updating the states. The action $\beta$ for a state $s$ (\emph{i.e.} ledger $\chain$, message $\gstate$, contract $\lstate$) is written as $s[\beta]$. Here action can be updating a variable, \emph{i.e.} $s[x \leftarrow v]$ means the variable $x$ in $s$ is updated with new value $v$. Or the action can be Ether transfer between two addresses, \emph{i.e.} $\chain[\textit{addr}_1 \stackrel{v}{\rightarrow} \textit{addr}_2]$ indicates the transfer of $v$ Ethers from $\textit{addr}_1$ to $\textit{addr}_2$. Also, we use $s.x$ to access the variable $x$ in state $s$, and use $s(x)$ to access its value.
 
 \begin{figure}[t]
 \centering
 $$
-\infer[{[\rname{sk}]}]{\conf{c;c',\cstate} \leadsto \conf{c',\cstate}}{c \in \mathbb{V} \cup \{\textbf{skip},\textbf{continue},\textbf{break}\}}
+\infer[{[\rname{sk}]}]{\conf{\kappa;\kappa',\cstate} \leadsto \conf{\kappa',\cstate}}{\kappa \in \mathbb{V} \cup \{\textbf{skip},\textbf{continue},\textbf{break}\}}
 ~~~~~~
-\infer[{[\rname{er}]}]{\conf{c,\cstate} \leadsto \conf{\textbf{throw},\cstate}}{\textit{error}}
+\infer[{[\rname{er}]}]{\conf{\kappa,\cstate} \leadsto \conf{\textbf{throw},\cstate}}{\textit{error}}
 ~~~~~~
 \infer[{[\rname{th}]}]{
 	\begin{array}{c}
-	\conf{\textbf{throw};c,\cstate}
+	\conf{\textbf{throw};\kappa,\cstate}
 	\leadsto \conf{\textbf{throw},\cstate}
 	\end{array}
 	}{}
@@ -153,40 +172,36 @@ $$
 	\end{array}
 }{
 	\begin{array}{c}
-	\eval{e}_{\cstate} = (v,\cstate_1)
-	\\
-	\cstate' = \cstate_1[\lstate.x \leftarrow v][\gstate.\textbf{gas} \subg \gas(:=)]
+	\eval{e}_{\cstate} = v
+	~~~
+	\cstate' = \cstate[\lstate.x \leftarrow v]
 	\end{array}}
 ~~~
 \infer[{[\rname{re}]}]{
 	\begin{array}{c}
-		\conf{\textbf{return}~e;c, \cstate}
+		\conf{\textbf{return}~e;\kappa, \cstate}
 		\leadsto \conf{v,\cstate'}
 	\end{array}
-}{\eval{e}_\cstate  = (v,\cstate')}
+}{\eval{e}_\cstate  = v}
 ~~~
 \infer[{[\rname{seq}]}]{
 	\begin{array}{c}
-		\conf{c_1;c_2,\cstate}
-		\leadsto \conf{c'_1;c_2,\cstate'}
+		\conf{\kappa_1;\kappa_2,\cstate}
+		\leadsto \conf{\kappa'_1;\kappa_2,\cstate'}
 	\end{array}
-}{\conf{c_1,\cstate} \leadsto \conf{c'_1,\cstate'}}	
+}{\conf{\kappa_1,\cstate} \leadsto \conf{\kappa'_1,\cstate'}}	
 $$
 
 $$
-\infer[{[\rname{at}]}]{\conf{c(b),\cstate} \leadsto \conf{\textbf{skip},\cstate'}}{
+\infer[{[\rname{at}]}]{\conf{\textbf{assert}(b),\cstate} \leadsto \conf{\textbf{skip},\cstate}}{
 	\begin{array}{c}
-	c \in \{\textbf{require},\textbf{assert}\}
-	~~~~~
-	\eval{b}_{\cstate} = (\textbf{true},\cstate')
+	\eval{b}_{\cstate} = \textbf{true}
 	\end{array}
 }
 ~~~~~~
-\infer[{[\rname{af}]}]{\conf{c(b),\cstate} \leadsto \conf{\textbf{throw},\cstate'}}{
+\infer[{[\rname{af}]}]{\conf{\textbf{assert}(b),\cstate} \leadsto \conf{\textbf{throw},\cstate}}{
 	\begin{array}{c}
-	c \in \{\textbf{require},\textbf{assert}\}~~~
-	~~~~~
-	\eval{b}_{\cstate} = (\textbf{false},\cstate')
+	\eval{b}_{\cstate} = \textbf{false}
 	\end{array}}
 $$
 
@@ -194,24 +209,24 @@ $$
 \infer[{[\rname{it}]}]{
 	\begin{array}{c}
 	\conf{\ifs{b}{c_1}{c_2},\cstate}
-	\leadsto \conf{c_1,\cstate'}
+	\leadsto \conf{c_1,\cstate}
 	\end{array}
 }
 {
 	\begin{array}{c}
-	\eval{b}_{\cstate} = (\textbf{true},\cstate')
+	\eval{b}_{\cstate} = \textbf{true}
 	\end{array}
 }	
 ~~~~~~
 \infer[{[\rname{if}]}]{
 	\begin{array}{c}
 	\conf{\ifs{b}{c_1}{c_2},\cstate}
-	\leadsto \conf{c_2,\cstate'}
+	\leadsto \conf{c_2,\cstate}
 	\end{array}
 }
 {
 	\begin{array}{c}
-	\eval{b}_{\cstate} = (\textbf{false},\cstate')\\
+	\eval{b}_{\cstate} = \textbf{false}\\
 	\end{array}
 }	
 $$
@@ -220,14 +235,14 @@ $$
 \infer[{[\rname{wt}]}]
 {
 	\begin{array}{c}
-	\conf{\whiles{\textbf{true}}{c},\cstate}
+	\conf{\whiles{b}{c},\cstate}
 	\\
-	 \leadsto \conf{\conf{c};\whiles{b}{c},\cstate'}
+	 \leadsto \conf{\conf{c};\whiles{b}{c},\cstate}
 	\end{array}
 }
 {
 	\begin{array}{c}
-	\eval{b}_{\cstate} = (\textbf{true},\cstate')
+	\eval{b}_{\cstate} = \textbf{true}
 	\end{array}
 }
 ~~~~~
@@ -241,13 +256,13 @@ $$
 }
 {
 	\begin{array}{c}
-	\eval{b}_{\cstate} = (\textbf{false},\cstate')
+	\eval{b}_{\cstate} = \textbf{false}
 	\end{array}
 }
 ~~~~
 \infer[{[\rname{bk}]}]{
 	\begin{array}{c}
-	\conf{\conf{\textbf{break};c};\whiles{b}{c'},\cstate} 
+	\conf{\conf{\textbf{break};\kappa};\whiles{b}{c'},\cstate} 
 	\\
 	\leadsto \conf{\textbf{skip},\cstate}
 	\end{array}
@@ -258,21 +273,21 @@ $$
 $$
 \infer[{[\rname{ct}]}]{
 	\begin{array}{c}
-	\conf{\conf{\textbf{continue};c},\cstate}
+	\conf{\conf{\textbf{continue};\kappa},\cstate}
 	\leadsto \conf{\textbf{skip},\cstate}
 	\end{array}
 }{}
 ~~~~
-\infer[{[\rname{in}]}]{\conf{\conf{c_1;c_2},\cstate} \leadsto \conf{\conf{c_1';c_2},\cstate'}}
+\infer[{[\rname{in}]}]{\conf{\conf{\kappa_1;\kappa_2},\cstate} \leadsto \conf{\conf{\kappa_1';\kappa_2},\cstate'}}
 {
 	\begin{array}{c}
-	c_1 \not \in \{\textbf{continue},\textbf{break}\}
+	\kappa_1 \not \in \{\textbf{continue},\textbf{break}\}
 	\\
-	\conf{c_1,\cstate} \leadsto \conf{c_1',\cstate'}
+	\conf{\kappa_1,\cstate} \leadsto \conf{\kappa_1',\cstate'}
 	\end{array}
 }
 ~~~~
-\infer[{[\rname{out}]}]{\conf{\conf{c},\cstate} \leadsto \conf{c,\cstate}}{ c \in \mathbb{V} \cup \{\textbf{skip},\textbf{throw}\}}
+\infer[{[\rname{out}]}]{\conf{\conf{\kappa},\cstate} \leadsto \conf{\kappa,\cstate}}{ \kappa \in \mathbb{V} \cup \{\textbf{skip},\textbf{throw}\}}
 $$
 \caption{Operational semantics for basic commands.}\label{fig:opbasic}
 \end{figure}
@@ -280,148 +295,160 @@ $$
 \begin{figure}[t]
 \centering
 $$
-\infer[{[\rname{ifun}]}]{\conf{f(\bar{a}),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
+\infer[{[\rname{ifun}]}]{\conf{f(\bar{a}),\cstate} \leadsto \conf{\conf{c,\cstate'},\cstate}}
 {
 	\begin{array}{c}	
-	\eval{\bar{a}}_{\cstate} = (\bar{v},\cstate_1)~~~
-	\cstate_1.\mathbb{B}(\lstate.\textit{addr}) = (\mathcal{C}_f,\lstate_f)~~~~
-	\mathcal{C}_f.f = (c_f,\overline{s})~~~\lstate_f' = \lstate_f[\overline{s} \leftarrow \overline{v}]
+	\cstate.\mathbb{B}(\eval{\textbf{this}}_{\cstate}) = (\mathcal{C},\lstate_f)~~~~
+	\mathcal{C}(f) = (c,\bar{v})
 	\\
-	\cstate_f = \cstate_1[\lstate \leftarrow \lstate_f'][b \leftarrow \textbf{false}]~~~
-	\cstate' = \cstate_1[\gstate.\textit{gas}  \leftarrow 0]
-	\end{array}
-}
-$$
-$$
-\infer[{[\rname{fun}]}]{\conf{\textit{addr}.f(\bar{a}),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
-{
-	\begin{array}{c}	
-	\eval{\bar{a}}_{\cstate} = (\bar{v},\cstate_1)~~~
-	\cstate_1.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)~~~~
-	\mathcal{C}_f.f = (c_f,\bar{s})~~~~\lstate_f' = \lstate_f[\overline{s} \leftarrow \overline{v}]
-	\\
-	\cstate_f = \cstate_1[\gstate.\textit{msg}.\textit{sender} \leftarrow \lstate.\textit{addr}][\lstate \leftarrow \lstate_f'][b \leftarrow \textbf{false}]~~~
-	\cstate' = \cstate_1[\gstate.\textit{gas}  \leftarrow 0]
-	\end{array}
-}
-$$
-\vspace{-0.5em}
-$$
-\infer[{[\rname{call}]}]{\conf{\textit{addr}.\textbf{call}(f,\bar{a}).\textbf{value}(e).\textbf{gas}(g),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
-{
-	\begin{array}{c}	
-	\eval{(\bar{a},e,g)}_{\cstate} = ((\bar{v},v_e,v_g),\cstate_1)~~~~
-	\cstate_1.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)
-	~~~~\mathcal{C}.f = (c_f,\overline{s})~~~~\lstate_f' = \lstate_f[\overline{s} \leftarrow \overline{v}]
-	\\
-	\cstate_2 = \cstate_1[\gstate.\textit{msg}.\textit{sender} \leftarrow \lstate.\textit{addr}][\gstate.\textit{msg}.\textit{value} \leftarrow v_e][\gstate.\textit{gas} \leftarrow v_g]
-	\\
-	\cstate_f = \cstate_2[\chain(\lstate.\textit{addr}) \stackrel{v_e}{\rightarrow} \chain(\textit{addr})][\lstate \leftarrow \lstate_f'][b \leftarrow \textbf{true}]
+	\lstate' = \lstate_f[\bar{v} \leftarrow \eval{\bar{a}}_\cstate]
 	~~~~
-	\cstate' = \cstate_1[\gstate.\textit{gas} \subg v_g]
+	\cstate' = \cstate[\lstate \leftarrow \lstate'][b \leftarrow \textbf{false}]
+	\end{array}
+}
+~~~~~
+\infer[{[\rname{fun}]}]{\conf{\textit{addr}.f(\bar{a}),\cstate} \leadsto \conf{\conf{c,\cstate'},\cstate}}
+{
+	\begin{array}{c}	
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C},\lstate_f)~~~
+	\mathcal{C}(f) = (c,\bar{v})~~~
+	\lstate' = \lstate_f[\bar{v} \leftarrow \eval{\bar{a}}_{\cstate}]
+	\\
+	\gstate' = \cstate.\gstate[\textrm{msg.sender} \leftarrow \eval{\textbf{this}}_{\cstate}][\textrm{msg.value} \leftarrow 0]
+	\\
+	\cstate' = \cstate[\gstate \leftarrow \gstate'][\lstate \leftarrow \lstate'][b \leftarrow \textbf{false}]
 	\end{array}
 }
 $$
 \vspace{-0.5em}
 $$
-\infer[{[\rname{dcall}]}]{\conf{\textit{addr}.\textbf{delegatecall}(f,\bar{a}).\textbf{gas}(g),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
+\infer[{[\rname{cal}]}]{\conf{\textit{addr}.\textbf{call}(f,\bar{a}).\textbf{value}(e),\cstate} \leadsto \conf{\conf{c,\cstate'},\cstate}}
 {
 	\begin{array}{c}	
-	\eval{(\bar{a},g}_{\cstate} = ((\bar{v},v_g),\cstate_1)~~~
-	\cstate_1.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)
-	~~~\mathcal{C}_f.f = (c_f,\overline{s})
-	\\
-	\cstate_f = \cstate_1[\gstate.\textit{gas} \leftarrow v_g][b \leftarrow \textbf{true}]
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C},\lstate_f)
 	~~~
-	\cstate' = \cstate_1[\gstate.\textit{gas} \subg v_g]
+	\mathcal{C}(f) = (c,\bar{v})~~~
+	\lstate' = \lstate_f[\bar{v} \leftarrow \eval{\bar{a}}_{\cstate}]
+	\\
+	\gstate' = \cstate.\gstate[\textrm{msg.sender} \leftarrow \eval{\textbf{this}}_{\cstate}][\textrm{msg.value} \leftarrow \eval{e}_{\cstate}]
+	\\
+	\chain' = \cstate.\chain[\eval{\textbf{this}}_{\cstate} \stackrel{\eval{e}_{\cstate}}{\rightarrow} \textit{addr}]
+	\\
+	\cstate' = \cstate[\chain \leftarrow \chain'][\gstate \leftarrow \gstate'][\lstate \leftarrow \lstate'][b \leftarrow \textbf{true}]
 	\end{array}
 }
-$$
-\vspace{-0.5em}
-$$
-\infer[{[\rname{tf}]}]{\conf{\textit{addr}.\textbf{transfer}(e),\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate'}}
+~~~~
+\infer[{[\rname{tf}]}]{\conf{\textit{addr}.\textbf{transfer}(e),\cstate} \leadsto \conf{\conf{c,\cstate'},\cstate}}
 {
 	\begin{array}{c}	
-	\eval{e}_\cstate = (v_e,\cstate_1)~~~
-	\cstate_1.\mathbb{B}(\textit{addr}) = (\mathcal{C}_f,\lstate_f)~~~~
-	\mathcal{C}.() = (c_f,\_)
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C},\lstate_f)~~~~
+	\mathcal{C}(\_) = (c,\_)
 	\\
-	\cstate_2 = \cstate_1[\gstate.\textit{msg}.\textit{sender} \leftarrow \lstate.\textit{addr}][\gstate.\textit{msg}.\textit{value} \leftarrow v_e][\gstate.\textit{gas} \leftarrow 2300]
+	\gstate' = \cstate.\gstate[\textrm{msg.sender} \leftarrow \eval{\textbf{this}}_{\cstate}][\textrm{msg.value} \leftarrow \eval{e}_{\cstate}]
+		\\
+	\chain' = \cstate.\chain[\eval{\textbf{this}}_{\cstate} \stackrel{\eval{e}_{\cstate}}{\rightarrow} \textit{addr}]
 	\\
-	\cstate_f = \cstate_2[\chain(\lstate.\textit{addr}) \stackrel{v_e}{\rightarrow} \chain(\textit{addr})][\lstate \leftarrow \lstate_f][b \leftarrow \textbf{false}]~~~~
-	\cstate' = \cstate_1[\gstate.\textit{gas} \subg 2300]
+	\cstate' = \cstate[\chain \leftarrow \chain'][\gstate \leftarrow \gstate'][\lstate \leftarrow \lstate_f][b \leftarrow \textbf{false}]
 	\end{array}
 }
 $$
-\vspace{-0.5em}
 $$
 \infer[{[\rname{send}]}]{
 	\begin{array}{c}
 	\conf{\textit{addr}.\textbf{send}(e),\cstate} \leadsto
 	\\
-	\conf{\textit{addr}.\textbf{call}((),\_).\textbf{value}(e).\textbf{gas}(2300),\cstate}
+	\conf{\textit{addr}.\textbf{call}.\textbf{value}(e)(,),\cstate}
 	\end{array}
 }
+~~~~~~~~
+\infer[{[\rname{dcal}]}]{\conf{\textit{addr}.\textbf{delegatecall}(f,\bar{a}),\cstate} \leadsto \conf{\conf{c,\cstate'},\cstate}}
 {
+	\begin{array}{c}	
+	\cstate.\mathbb{B}(\textit{addr}) = (\mathcal{C},\lstate_f)
+	~~~\mathcal{C}(f) = (c,\bar{v})
+	\\
+	\lstate' = \lstate_f[\bar{v} \leftarrow \eval{\bar{a}}_{\cstate}]
+	~~~
+	\cstate' = \cstate[\lstate \leftarrow \lstate'][b \leftarrow \textbf{true}]
+	\end{array}
 }
-~~~~
+$$
+$$
 \infer[{[\rname{kill}]}]{
 	\conf{\textbf{selfdestruct}(\textit{addr}),\cstate} \leadsto \conf{\textbf{skip},\cstate'}
 }
 {
 	\begin{array}{ll}
-	\cstate' = \cstate[\chain(\lstate.\textit{addr}) \stackrel{\lstate.\textit{bal}}{\longrightarrow}  \chain(\textit{addr})]
-	[\chain(\lstate.\textit{addr}) \leftarrow \textbf{None}]
+	\chain' = \cstate.\chain[\eval{\textbf{this}}_{\cstate} \stackrel{e}{\rightarrow} \textit{addr}][\eval{\textbf{this}}_\cstate \leftarrow \textbf{None}]
+	\\
+	\eval{\textbf{this}.\textrm{balance}}_{\cstate} = e
+	~~~~
+	\cstate' = \cstate[\chain \leftarrow \chain']
+	\end{array}
+}
+~~~~~
+\infer[{[\rname{run}]}]{\conf{\conf{\kappa,\cstate_f},\cstate} \leadsto \conf{\conf{\kappa',\cstate_f'},\cstate}}
+{
+	\begin{array}{c}	
+	\conf{\kappa,\cstate_f} \leadsto \conf{\kappa',\cstate_f'}
+	\end{array}
+}
+$$
+$$
+\infer[{[\rname{cf}]}]{\conf{\conf{\textbf{throw},\cstate_f},\cstate} \leadsto \conf{\textbf{false},\cstate}}
+{
+	\begin{array}{c}	
+	\cstate.b = \textbf{true}
+	\end{array}
+}
+~~~~
+\infer[{[\rname{ff}]}]{\conf{\conf{\textbf{throw},\cstate_f},\cstate} \leadsto \conf{\textbf{throw},\cstate}}
+{
+	\begin{array}{c}	
+	\cstate.b = \textbf{false}
 	\end{array}
 }
 $$
 \vspace{-0.5em}
 $$
-\infer[{[\rname{run}]}]{\conf{\conf{c_f,\cstate_f},\cstate} \leadsto \conf{\conf{c_f',\cstate_f'},\cstate}}
-{
-	\begin{array}{c}	
-	\conf{c_f,\cstate_f} \leadsto \conf{c_f',\cstate_f'}
-	\end{array}
-}
-~~~~
-\infer[{[\rname{cf}]}]{\conf{\conf{\textbf{throw},\cstate_f},\cstate} \leadsto \conf{\textbf{false},\cstate'}}
-{
-	\begin{array}{c}	
-	\cstate.b = \textbf{true}\\
-	\cstate' = \cstate[\gstate.\textit{gas} \addg g_f]
-	\end{array}
-}
-~~~~
-\infer[{[\rname{ff}]}]{\conf{\conf{\textbf{throw},\cstate_f},\cstate} \leadsto \conf{\textbf{throw},\cstate'}}
-{
-	\begin{array}{c}	
-	\cstate.b = \textbf{false}\\
-	\cstate' = \cstate[\gstate.\textit{gas} \addg g_f]
-	\end{array}
-}
-$$
-\vspace{-0.5em}
-$$
-~~~~~~~~~~~~~
-\infer[{[\rname{fs}]}]{\conf{\conf{c,\cstate_f},\cstate} \leadsto \conf{c,\cstate'}}
+\infer[{[\rname{fs}]}]{\conf{\conf{\kappa_\mathbb{F},\cstate_f},\cstate} \leadsto \conf{\kappa_\mathbb{F},\cstate'}}
 {
 	\begin{array}{c}
-	c \in \mathbb{V} \cup \{\textbf{skip}\}	~~~~~ \cstate.b = \textbf{false}
+	\cstate.b = \textbf{false}~~~~
+	\cstate_f.\chain(\eval{\textbf{this}}_{\cstate_f}) = (\mathcal{C},\lstate_f)
 	\\
-	\cstate_1 = \cstate[\chain \leftarrow \cstate_f.\chain][\gstate.\textit{gas} \addg g_f]
-	\\
-	\cstate' = \cstate_1[\chain(\cstate_f.\lstate.\textit{addr}) \stackrel{m}{\leftarrow} \cstate_f.\lstate]
+	\chain' = \cstate_f.\chain[\eval{\textbf{this}}_{\cstate_f} \leftarrow (\mathcal{C},\cstate_f.\lstate)]
+	~~~~
+	\cstate' = \cstate[\chain \leftarrow \chain']
 	\end{array}
 }
 ~~~~~~
-\infer[{[\rname{cs}]}]{\conf{\conf{c,\cstate_f},\cstate} \leadsto \conf{\textbf{true},\cstate'}}
+\infer[{[\rname{cs}]}]{\conf{\conf{\kappa_\mathbb{F},\cstate_f},\cstate} \leadsto \conf{\textbf{true},\cstate'}}
 {
 	\begin{array}{c}
-	c \in \mathbb{V} \cup \{\textbf{skip}\}	~~~~~ \cstate.b = \textbf{true}\\
-	\cstate_1 = \cstate[\chain \leftarrow \cstate_f.\chain][\gstate.\textit{gas} \addg g_f]
-	\\
-	\cstate' = \cstate_1[\chain(\cstate_f.\lstate.\textit{addr}) \stackrel{m}{\leftarrow} \cstate_f.\lstate]
+	\cstate.b = \textbf{true}~~~~
+\cstate_f.\chain(\eval{\textbf{this}}_{\cstate_f}) = (\mathcal{C},\lstate_f)
+\\
+\chain' = \cstate_f.\chain[\eval{\textbf{this}}_{\cstate_f} \leftarrow (\mathcal{C},\cstate_f.\lstate)]
+~~~~
+\cstate' = \cstate[\chain \leftarrow \chain']
 	\end{array}
+}
+$$
+$$
+\infer[\rname{eas}_1]{\conf{x:=c_f,\cstate} \leadsto \conf{x:=\conf{c,\cstate'},\cstate''}}
+{
+\conf{c_f,\cstate} \leadsto \conf{\conf{\kappa,\cstate'},\cstate''}
+}
+~~~~~
+\infer[\rname{eas}_2]{\conf{x:=\conf{v,\cstate},\cstate'} \leadsto \conf{x:= v,\cstate''}}
+{
+\conf{\conf{v,\cstate},\cstate'} \leadsto \conf{v,\cstate''}
+}
+~~~~~
+\infer[\rname{eas}_3]{\conf{x:=\conf{\textbf{throw},\cstate},\cstate'} \leadsto \conf{\textbf{throw},\cstate''}}
+{
+	\conf{\conf{\textbf{throw},\cstate},\cstate'} \leadsto \conf{\textbf{throw},\cstate''}
 }
 $$
 \caption{Operational semantics for function calls.}\label{fig:opfun}
