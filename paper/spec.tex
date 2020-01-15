@@ -35,19 +35,32 @@ Note that we focus on the high-level semantics of Solidity and thus our light-we
 
 \subsection{The trace language}
 
-We introduce the trace language in Fig.~\ref{fig:assert} to specifying vulnerabilities. The constructor $\textit{mod}$ specifies different types of function modifiers supported by Solidity. The syntax for predicate is provided in $P$ in which a predicate can be modifier $\textit{mod}$, Boolean expression $b$, or quantified with $\forall$ and $\exists$. Given these premises, the constructor $t$ for trace can be empty $\epsilon$, primitive statement $c_p$, function call $c_f$, guarded with pre-condition $\{P\}t$ or with post-condition $t\{P\}$. Also, trace can be $c[t]$---statement $c$ equipped with some `scope' $[t]$---where $t$ is the trace of the function call inside $c$. As a result, scoping statements are limited to normal function call $c_f[t]$, assignment of function call $x := c_f[t]$, and assertion of function call $\textbf{assert}(c_f)[t]$. Our trace constructor also supports standard string operators such as $\nxt$ for concatenation (similar to ;), $+$ for non-deterministic choice, and $*$ for repetition. The trace semantics is constructed directly from the Solidity semantics and will be elaborated in CITE.
+We introduce the trace language in Fig.~\ref{fig:assert} to specifying vulnerabilities. The constructor $\textit{mod}$ specifies different types of function modifiers supported by Solidity. Next we have P for trace predicates, which are Solidity Boolean expressions enriched with modifiers in  $\textit{mod}$ and quantifiers $\{\forall$, $\exists\}$. Given these premises, the constructor $t$ for trace is defined to be empty $\epsilon$, variable $\bar{t_i}$, primitive statement $c_p$, function call $c_f$, trace with pre-condition $\{P\}t$ or with post-condition $t\{P\}$. Also, we have $c[t]$ to express the scope $t$ of statement $c$ where $t$ is the trace of the function call inside $c$. In detail, scoping statements are limited to normal function call $c_f[t]$, assignment of function call $x := c_f[t]$, and assertion of function call $\textbf{assert}(c_f)[t]$. Our trace constructor also supports standard string operators such as $\nxt$ for concatenation (similar to ;), $+$ for non-deterministic choice, and $*$ (Kleene star) for repetition. For convention, guarded conditions $\{P\}$ is not part of the alphabet. The trace semantics is constructed directly from the Solidity semantics and will be elaborated in CITE.
 
-We now extend the trace language to contain trace variables $\bar{t}$.
+We say a trace $t$ is \emph{concrete} if it does not contain $+$ or $*$ or trace variables. Otherwise it is called \emph{abstract}. A trace $t$ is \emph{complete} if it is concrete and every statement with function call has a scope. A complete trace $t$ is satisfiable if there exist $\cstate,\cstate'$ and $\kappa_\mathbb{F}$ such that $\conf{t,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'}$. We interpret abstract traces as sets of concrete traces according to the following semantics:
+$$
+\eval{\epsilon} = \{\epsilon,\{P\}\}~~~\eval{\bar{t}} = \mathbb{T}~~~\eval{a} = \{a\}~~~
+\eval{\{P\}} = \{\{Q\}~|~Q \Rightarrow P\}
+$$
+$$
+\eval{T_1 \cdot T_2} = \{t_1 \cdot t_2~|~t_i \in \eval{T_i}\}~~~~\eval{a[T]} = \{a[t]~|~t \in \eval{T}\}
+$$
+$$
+\eval{T_1 + T_2} = \eval{T_1} \cup \eval{T_2}
+~~~~~~
+\eval{T^*} = \{t~|~t = t_1 \ldots t_n \textrm{ where } t_k \in \eval{T}\}
+$$
 
-For convention, we say a trace $t$ is \emph{concrete} if every statement with function call has a scope. 
+A \emph{trace equation} $E$ has the format $T_1 = T_2$ where $T_1$ and $T_2$ are abstract traces with trace variables. We say a complete trace $t$ is a solution of $E$ if $t \in \eval{T_1} \cap \eval{T_2}$ and $t$ is satisfiable.  
 
+To solve the equation $T_1 = T_2$, we first treat it as a string equation and use SMT solver to retrieve the solutions. During this phase, conditions $\{P\}$ are ignored and thus treated as $\epsilon$. Suppose the complete trace $s$ is the solution, we then insert the conditions back to $s$. If there are two conditions $\{P_1\}$ and $\{P_2\}$ at the same position, we replace it with the conjunction $\{P_1 \wedge P_2\}$. It is easy to verify that the new complete trace $s'$ satisfies $s' \in \eval{T_1} \cap \eval{T_2}$. As a result, it remains to check whether $s'$ is satisfiable using symbolic execution.
 
 \begin{figure}[t]
 $
 \begin{array}{lcl}
 \textit{mod}&::=~&\textsf{owned}~|~ \textsf{public}~|~\textsf{private}~|~\textsf{payable}~|~\textsf{pure}~|~\textsf{view}~|~\textsf{external}\\
-P&::=~&\textit{mod}~|~ b ~|~ \exists x.~P~|~ \forall x.~P\\
-t&::=~&\epsilon~|~c_{p}~|~c_f~|~\{P\}t~|~t\{P\}~|~c_f[t]~|~x:=c_f[t]~|~\textbf{assert}(c_f)[t]~|~t \nxt t~|~t+t~|~t^*
+P&::=~&\textit{mod}~|~ b ~|~ P \&\& P ~|~ P || P ~|~ !P~|~\exists x.~P~|~ \forall x.~P\\
+t&::=~&\epsilon~|~\bar{t_i}~|~c_{p}~|~c_f~|~\{P\}~|~c_f[t]~|~x:=c_f[t]~|~\textbf{assert}(c_f)[t]~|~t \nxt t~|~t+t~|~t^*
 \end{array}
 $
 \caption{The trace language}\label{fig:assert}
