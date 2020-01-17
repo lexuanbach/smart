@@ -36,55 +36,46 @@
 	}
 	] 
 
-	\node[com,text width=2cm, text height = 0.3cm] (transformer){Transformer}; 
-	\node[com,text width=2cm, text height = 0.3cm] (matcher)[right=of transformer]{Matcher}; 
-	\node[com,text width=2cm, text height = 0.3cm] (verifier)[right=of matcher, xshift=5em]{Verifier};   
-	\node[data] (input) [above=of transformer,yshift=-2em] {smart contract A};
-	\node[data] (trace)[above=of matcher,yshift=-2em]{vunerable trace T}; 
+	\node[com,text width=2cm, text height = 0.3cm] (transformer){\texttt{transformer}}; 
+	\node[com,text width=2cm, text height = 0.3cm] (matcher)[right=of transformer]{\texttt{matcher}}; 
+	\node[com,text width=2cm, text height = 0.3cm] (verifier)[right=of matcher, xshift=3em]{\texttt{verifier}};   
+	\node[data] (input) [above=of transformer,yshift=-2em] {function f};
+	\node[data] (trace)[above=of matcher,yshift=-2em]{vunerable trace $T_v$}; 
 	\node[res] (result)[above=of verifier,yshift=-2em]{report bug};      
 	\draw  (input) -- (transformer);    
 	\draw  (trace) -- (matcher);   
-	\draw (transformer) --node[data,above] {expression E} (matcher);  
+	\draw (transformer) --node[data,above] {trace $T_f$} (matcher);  
 	  \path[every node/.style={}]
 	  %(verifier) edge[bend left=30] node[below]  {V is infeasible} (matcher)
     %(matcher) edge[bend left=30] node[above]  {matched with new \\ attack vector %V} (verifier)
-    (matcher) edge[above] node {attack vectors $\{V_i\}_{i=1}^n$} (verifier)
+    (matcher) edge[above] node {attack trace \\ vectors $\{V_i\}_{i=1}^n$} (verifier)
     (verifier) edge[right] node {some $V_i$ \\ is feasible} (result);
 	\end{tikzpicture}
 	\caption{Our framework for checking vulnerabilities in Ethereum smart contracts.}\label{fig:framework}	
 \end{figure}
 
-\begin{enumerate}
-	\item $\textbf{Transformer}$: transform the smart contract A into an expression E (look like regular expression but we can have guard conditions inside).
-	\item $\textbf{Matcher}$: check whether $T \in E$, \emph{i.e.} the trace $T$ satisfies the expression $E$. At the same time, generates attack vectors $V$ which contains function/variable assignments.
-	\item $\textbf{Verifier}$: run the smart contract with the give input to see whether the vulnerability can be reproduced. We need this step as our semantics over-approximates the Ethereum semantics.
-\end{enumerate}
+We illustrate the high-level of our framework in Fig.~\ref{fig:framework}. It has three main components: \texttt{transformer}, \texttt{matcher} and \texttt{verifier}. To check whether a smart contract function $f$ is susceptible  with respect to a specific vulnerability $V$, the framework first activates \texttt{transformer} to transform $f$ into the corresponding trace $T_f$. At the same time, the specification of $V$ is provided as the trace $T_v$. Next the \texttt{matcher} component is called to check whether the trace equation $T_f = T_v$ is satisfiable. If it is satisfiable then a list of solutions $\{V_i\}_{i=1}^n$ is provided. Finally, these solutions are checked by the \texttt{verifiable} for satisfiability. If any of these solutions is satisfied then we conclude that $f$ is vulnerable to $T_v$.
 
 \subsection{Transformation of smart contracts into expressions}
 
-Let $\mathcal{A}$ be the pre-defined abstraction function that maps statements/function's names into abstract symbols. We define the transformation $\trans_n$ that transform a statement into its respective trace form. We use $n$ as the upper limit for the number of times we can unfold nested functions. As a result, our transformation always terminates. Normally, we use $\trans_1$ for all the vulnerability checks, except reentrancy and gasless send in which we use $\trans_2$.
+The implementation of \texttt{transformer} takes advantages of the deductive system in Fig.~\ref{fig:syn} which takes a statement $c$ and transforms its into a trace $t$, denoted as $c \triangleright_{n} t$. Here $n$ is an additional parameter that restricts the number of times a function is unfolded, effectively making the transformation terminate on every function.
+
 \begin{figure}
 $$
-\infer[{[\rname{base}]}]{c \trans_{n} c}{
-	\begin{array}{c}
-	\textsf{primitive}(c)
-	\end{array}}
+\infer[{[\rname{base}]}]{c_p \trans_{n} c_p}{}
 ~~~~~
-\infer[{[\rname{if}]}]{\ifs{b}{c_1}{c_2} \trans_{n} \textbf{assert}(b);t_1+\textbf{assert}(!b);t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
+\infer[{[\rname{if}]}]{\ifs{b}{c_1}{c_2} \trans_{n} \textbf{assert}(b) \nxt t_1+\textbf{assert}(!b) \nxt t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
 $$
 $$
-\infer[{[\rname{while}]}]{\whiles{b}{c} \trans_{n} (\textbf{assert}(b);t)^*;\textbf{assert}(!b)}{c \trans_{n} t}
+\infer[{[\rname{while}]}]{\whiles{b}{c} \trans_{n} (\textbf{assert}(b) \nxt t)^* \nxt \textbf{assert}(!b)}{c \trans_{n} t}
 ~~~~~~
 \infer[{[\rname{seq}]}]{c_1;c_2 \trans_{n} t_1 \nxt t_2}{c_1 \trans_{n} t_1~~~~ c_2 \trans_{n} t_2}
 $$
 $$
-\infer[{[\rname{func}_1]}]{c_f \trans_{0} \epsilon}{}
+\infer[{[\rname{func}_1]}]{c_f \trans_{0} c_f}{}
 ~~~~~~
-\infer[{[\rname{func}_2]}]{c_f \trans_{n} c_f[\{I_f\}t]}{n > 0~~\textsf{lookup}(c_f,\chain) = (c,I_f)~~~c \trans_{n-1} t}
+\infer[{[\rname{func}_2]}]{c_f \trans_{n} c_f[\{\textit{mod}\} \nxt t]}{n > 0~~\textsf{body}(c_f) = (c,\textit{mod})~~~c \trans_{n-1} t}
 $$
-\caption{Trace synthesis}\label{fig:syn}
+\caption{Trace synthesis for the \texttt{transformer} component.}\label{fig:syn}
 \end{figure}
 
-
-
-Matcher: need to propose variables 1st, then check the syntax first, incrementally. From outer to inner. Then semantics.

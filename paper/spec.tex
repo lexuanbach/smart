@@ -37,10 +37,13 @@ Note that we focus on the high-level semantics of Solidity and thus our light-we
 
 We introduce the trace language in Fig.~\ref{fig:assert} to specifying vulnerabilities. The constructor $\textit{mod}$ specifies different types of function modifiers supported by Solidity. Next we have P for trace predicates, which are Solidity Boolean expressions enriched with modifiers in  $\textit{mod}$ and quantifiers $\{\forall$, $\exists\}$. Given these premises, the constructor $t$ for trace is defined to be empty $\epsilon$, variable $\bar{t_i}$, primitive statement $c_p$, function call $c_f$, trace with pre-condition $\{P\}t$ or with post-condition $t\{P\}$. Also, we have $c[t]$ to express the scope $t$ of statement $c$ where $t$ is the trace of the function call inside $c$. In detail, scoping statements are limited to normal function call $c_f[t]$, assignment of function call $x := c_f[t]$, and assertion of function call $\textbf{assert}(c_f)[t]$. Our trace constructor also supports standard string operators such as $\nxt$ for concatenation (similar to ;), $+$ for non-deterministic choice, and $*$ (Kleene star) for repetition. For convention, guarded conditions $\{P\}$ is not part of the alphabet. The trace semantics is constructed directly from the Solidity semantics and will be elaborated in CITE.
 
-We say a trace $t$ is \emph{concrete} if it does not contain $+$ or $*$ or trace variables. Otherwise it is called \emph{abstract}. A trace $t$ is \emph{complete} if it is concrete and every statement with function call has a scope. A complete trace $t$ is satisfiable if there exist $\cstate,\cstate'$ and $\kappa_\mathbb{F}$ such that $\conf{t,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'}$. We interpret abstract traces as sets of concrete traces according to the following semantics:
+We say a trace $t$ is \emph{concrete} if it does not contain $+$ or $*$ or trace variables. Otherwise it is called \emph{abstract}. A trace $t$ is \emph{complete} if it is concrete and every statement with function call has a scope. A complete trace $t$ is satisfiable if there exist $\cstate,\cstate'$ and $\kappa_\mathbb{F}$ such that $\conf{t,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'}$. Let $\texttt{strip}(t)$ be the trace constructed by removing all conditions $\{P\}$ in trace $t$. Two concrete traces $t_1$, $t_2$ are \emph{compatible} if $\texttt{strip}(t_1) = \texttt{strip}(t_2)$. Furthermore, their unified trace, denoted by $\texttt{uni}(t_1,t_2)$, is constructed by inserting all conditions in $t_1$, $t_2$ into $\texttt{strip}(t_1)$. In case two conditions $\{P_1\}$ and $\{P_2\}$ are inserted into the same position, their conjunction $\{P_1 \&\& P_2\}$ is inserted instead.
+
+
+ We interpret abstract traces as sets of concrete traces according to the following semantics where $\mathbb{T}$ is the trace set and $a \in \{c_p,c_f\}$:
 $$
-\eval{\epsilon} = \{\epsilon,\{P\}\}~~~\eval{\bar{t}} = \mathbb{T}~~~\eval{a} = \{a\}~~~
-\eval{\{P\}} = \{\{Q\}~|~Q \Rightarrow P\}
+\eval{\epsilon} = \{\epsilon\}~~~\eval{\bar{t}} = \mathbb{T}~~~\eval{a} = \{a\}~~~
+\eval{\{P\}} = \{\{P\}\}
 $$
 $$
 \eval{T_1 \cdot T_2} = \{t_1 \cdot t_2~|~t_i \in \eval{T_i}\}~~~~\eval{a[T]} = \{a[t]~|~t \in \eval{T}\}
@@ -53,7 +56,17 @@ $$
 
 A \emph{trace equation} $E$ has the format $T_1 = T_2$ where $T_1$ and $T_2$ are abstract traces with trace variables. We say a complete trace $t$ is a solution of $E$ if $t \in \eval{T_1} \cap \eval{T_2}$ and $t$ is satisfiable.  
 
-To solve the equation $T_1 = T_2$, we first treat it as a string equation and use SMT solver to retrieve the solutions. During this phase, conditions $\{P\}$ are ignored and thus treated as $\epsilon$. Suppose the complete trace $s$ is the solution, we then insert the conditions back to $s$. If there are two conditions $\{P_1\}$ and $\{P_2\}$ at the same position, we replace it with the conjunction $\{P_1 \wedge P_2\}$. It is easy to verify that the new complete trace $s'$ satisfies $s' \in \eval{T_1} \cap \eval{T_2}$. As a result, it remains to check whether $s'$ is satisfiable using symbolic execution.
+To solve the equation $T_1 = T_2$, we first treat it as a string equation and use SMT solver to retrieve the solutions. During this phase, conditions $\{P\}$ are ignored and thus treated as the empty string $\epsilon$. Suppose the complete trace $s$ is the solution, we then insert the conditions back to $s$. If there are two conditions $\{P_1\}$ and $\{P_2\}$ at the same position, we replace it with the conjunction $\{P_1 \wedge P_2\}$. It is easy to verify that the new complete trace $s'$ satisfies $s' \in \eval{T_1} \cap \eval{T_2}$. As a result, it remains to check whether $s'$ is satisfiable using symbolic execution.
+
+\begin{proposition}
+Let $t_1$, $t_2$ be two compatible complete traces and $t$ be their unified trace. Then for all $\cstate$, $\cstate'$ and $\kappa_\mathbb{F}$, we have the equivalence:
+$$
+\conf{t_1,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'} \wedge \conf{t_2,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'} \textrm{ iff } \conf{t,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'}.
+$$
+	\end{proposition}
+\begin{proof}
+	We \emph{normalize} $t_1$, $t_2$, $t$ into $t'_1$, $t'_2$, $t$ by inserting trivial condition $\{\textbf{true}\}$ between statements if no condition exists in that position yet. Note that such transformation does not change the satisfiability property, \emph{e.g.} $\conf{t ,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'}$ iff $\conf{t',\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate'}$. As a result, $t'_1$, $t'_2$ and $t'$ now have the same structure and thus standard structural induction can be applied to prove the equivalence. \qed
+	\end{proof}
 
 \begin{figure}[t]
 $
@@ -69,31 +82,32 @@ $
 \subsection{Vulnerabilities}
 
 Having described the trace syntax in CITE, we now take a close look on how to use this syntax to define vulnerabilities in Solidity contracts.
-
-
-Note: we don't support cross-transaction traces, \emph{i.e.} traces with functions executed in different transactions. Need an invariant for state that says "all variables's values are the same", can simply over-approximate to variables in the functions.
 \begin{enumerate}
 	\item Integer overflow/underflow:
 	$$
-	\mathcal{F}[\overline{t_1} \nxt \{x \geq \textit{min}\}\overline{t_2}\{x < \textit{min}\} \nxt \overline{t_3}]
+	\mathcal{F}[\overline{t_1} \nxt \{x \geq \textit{min}\} \nxt \overline{t_2} \nxt \{x < \textit{min}\} \nxt \overline{t_3}]
 	~~~~~
-	\mathcal{F}[\overline{t_1} \nxt \{\overline{x} \leq \textit{max}\}\overline{t_2}\{\overline{x} > \textit{max}\} \nxt \overline{t_3}]
+	\mathcal{F}[\overline{t_1} \nxt \{\overline{x} \leq \textit{max}\} \nxt \overline{t_2} \nxt \{\overline{x} > \textit{max}\} \nxt \overline{t_3}]
 	$$
-	where $\overline{t_2} \in \{e:= e + e, e:= e - e, e:= e \times e, e:= e~\textbf{div}~e\}$
+	where $\textit{min}$ (resp. \textit{max}) is the minimal (resp. \textit{maximal}) defined integer and $\overline{t_2}$ is an assignment statement of the form $x:=e$ or $x:=c_f$.
 	\item Unchecked send:
 	$$
-	\mathcal{F}[\overline{t_1} \nxt \overline{\textit{addr}}.f \nxt \overline{t_2}]
+	\mathcal{F}[\overline{t_1} \nxt \overline{t_2} \nxt \overline{t_3}]
 	$$
 	
-	where $f \in \{\textbf{send},\textbf{transfer},\textbf{call}\}$
+	where $\overline{t_2} \in \{\textbf{send},\textbf{transfer},\textbf{call}\}$
 	\item Reentrancy:
 	$$
-	\mathcal{F}[\{\textbf{balance} = \overline{a_0}\}\overline{t_1} \nxt \overline{\textit{addr}}.\textbf{call}.\textbf{value}(\overline{v}).()[\mathcal{F}[\overline{t_2}\{\textbf{balance} < \overline{a_0}\}]] \nxt \overline{t_3}]
+	\textrm{Naive form}: \mathcal{F}[\overline{t_1} \nxt \overline{t_2}[\overline{t_3} \nxt \mathcal{F}[\overline{t_4}] \nxt \overline{t_5}] \nxt \overline{t_6}]
 	$$
-	
+		$$
+	\textrm{Advance form}: \mathcal{F}[\{\textbf{this.balance} = \overline{a_0}\} 
+	\nxt \overline{t_1} \nxt \overline{t_2}[\overline{t_3} \nxt \mathcal{F}[\overline{t_4} \nxt \{\textbf{this.balance} < \overline{a_0}\}] \nxt \overline{t_5}] \nxt \overline{t_6}]
+	$$
+	where $\overline{a_0}$ is ghost variable and $\overline{t_2} \in \{\textbf{call}\}$. Basically, the advance form tells us that by re-entering the function $\mathcal{F}$, the attacker manages to drain the balance of the host contract.
 	\item Suicide contracts:
 	$$
-	\mathcal{F}[\{!\textsf{owned}\}\overline{t_1} \nxt \textbf{selfdestruct}(\overline{\textit{addr}}) \nxt \overline{t_2}]
+	\mathcal{F}[\{!\textsf{owned}\} \nxt \overline{t_1} \nxt \textbf{selfdestruct}(\overline{\textit{addr}}) \nxt \overline{t_2}]
 	$$
 	\item Time-stamp dependency:
 	$$
@@ -193,7 +207,7 @@ $$
 \infer[{[\rname{re}]}]{
 	\begin{array}{c}
 		\conf{\textbf{return}~e;\kappa, \cstate}
-		\leadsto \conf{v,\cstate'}
+		\leadsto \conf{v,\cstate}
 	\end{array}
 }{\eval{e}_\cstate  = v}
 ~~~
@@ -523,41 +537,32 @@ $$
 Evaluation:
 \begin{figure}
 $$
-\infer[\rname{base}]{\conf{t,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}{\textsf{command}(t)~~~\conf{t,\cstate} \stackrel{*}{\leadsto} \conf{t_{\mathbb{F}},\cstate'}}
-~~~
-\infer[\rname{left}]{\conf{t_1+t_2,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}{\conf{t_1,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}
-~~~
-\infer[\rname{right}]{\conf{t_1+t_2,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}{\conf{t_2,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}
-$$
-
-$$
-\infer[\rname{pre}]{\conf{\{P\}t,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}{\eval{P}_\cstate = \textbf{true}~~~\conf{t,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}
+\infer[\rname{base}]{\conf{c_p,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{T}},\cstate'}}{\conf{c_p,\cstate} \stackrel{*}{\leadsto} \conf{\kappa_{\mathbb{T}},\cstate'}}
 ~~~~~
-\infer[\rname{post}]{\conf{t\{P\},\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}{\conf{t,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}~~~\eval{P}_{\cstate'} = \textbf{true}}
-$$
-
-$$
-\infer[\rname{star}_1]{\conf{t^*,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}{\conf{t \nxt t^*,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate'}}
+\infer[\rname{true}]{\conf{\{P\},\cstate} \hookrightarrow \conf{\textbf{skip},\cstate}}{\eval{P}_\cstate = \textbf{true}}
 ~~~~~
-\infer[\rname{star}_2]{\conf{t^*,\cstate} \hookrightarrow \conf{\textbf{skip},\cstate}}{}
+\infer[\rname{false}]{\conf{\{P\},\cstate} \hookrightarrow \conf{\textbf{throw},\cstate}}{\eval{P}_\cstate = \textbf{false}}
 $$
 
 $$
-\infer[\rname{seq}_1]{\conf{t_1 \nxt t_2,\cstate} \hookrightarrow \conf{t_{\mathbb{F}}' ,\cstate'}}{\conf{t_1,\cstate} \hookrightarrow \conf{t_{\mathbb{F}},\cstate_1}~~~\conf{t_2,\cstate_1} \hookrightarrow \conf{t_{\mathbb{F}}',\cstate'}~~~t_\mathbb{F} \neq \textbf{throw}}
+\infer[\rname{seq}_1]{\conf{t_1 \nxt t_2,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{T}}' ,\cstate'}}{\conf{t_1,\cstate} \hookrightarrow \conf{\kappa_{\mathbb{F}},\cstate_1}~~~\conf{t_2,\cstate_1} \hookrightarrow \conf{\kappa_{\mathbb{T}}',\cstate'}}
 ~~~~~
 \infer[\rname{seq}_2]{\conf{t_1 \nxt t_2,\cstate} \hookrightarrow \conf{\textbf{throw} ,\cstate'}}{\conf{t_1,\cstate} \hookrightarrow \conf{\textbf{throw},\cstate'}}
 $$
 
 $$
-\infer[\rname{scope}]{\conf{t_f[t],\cstate} \hookrightarrow \conf{t'_{\mathbb{F}},\cstate'}}
+\infer[\rname{scope}]{\conf{c_f[t],\cstate} \hookrightarrow \conf{\kappa'_{\mathbb{T}},\cstate'}}
 {
 	\begin{array}{c}
-	\conf{t_f,\cstate} \leadsto \conf{\conf{c_f,\cstate_f},\cstate_1}~~~\conf{t,\cstate_f} \hookrightarrow \conf{t_{\mathbb{F}},\cstate_f'}\\
-	\conf{\conf{t_{\mathbb{F}},\cstate_f'},\cstate_1} \leadsto \conf{t'_{\mathbb{F}},\cstate'}~~~~~~t_f \in \{f(\bar{a}),\textit{addr}.f(\bar{a})\}
+	\conf{c_f,\cstate} \leadsto \conf{\conf{\kappa,\cstate_f},\cstate_1}
+	~~~~
+	\conf{t,\cstate_f} \hookrightarrow \conf{\kappa_{\mathbb{T}},\cstate_f'}
+	~~~~
+	\conf{\conf{\kappa_{\mathbb{T}},\cstate_f'},\cstate_1} \leadsto \conf{\kappa'_{\mathbb{T}},\cstate'}
 	\end{array}
 }
 $$
-\caption{A trace semantics}\label{fig:tracesem}
+\caption{Semantics for complete traces.}\label{fig:tracesem}
 \end{figure}
 
 

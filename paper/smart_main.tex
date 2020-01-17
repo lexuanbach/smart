@@ -221,13 +221,14 @@ A trace set $T$ is called a $n$-approximation of a program $c$ if $c\trianglerig
 	$\eval{c} = \{c\}$, $\eval{t_1+t_2} = \eval{t_1} \cup \eval{t_2}$, $\eval{t^*} = \bigcup_{i=0}^\infty \eval{t^i}$, $\eval{c_f[t]} = \{c_f\} \cup \{c_f[s] \textrm{ s.t. } s \in \eval{t}\}$, $\eval{t_1 \cdot t_2} = \{s_1 \cdot s_2 \textrm{ s.t. } s_1 \in \eval{t_1} \wedge s_2 \in \eval{t_2}\}$ 
 	\end{definition}
 
+\section{Verification framework}
+\input{framework.tex}
 
 
 \section{Specification language}
 \input{spec.tex}
 
-\section{Verification framework}
-\input{framework.tex}
+
 
 \section{Implementation}
 
