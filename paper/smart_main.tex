@@ -35,6 +35,7 @@
 \newcommand{\addg}{\stackrel{\oplus}{\leftarrow}}
 \newcommand{\trace}[2]{\mathsf{trace}(#1,#2)}
 \newcommand{\hide}[1]{}
+\newcommand{\code}[1]{\texttt{#1}}
 \begin{document}
 %
 \title{Formal Specification for Detecting Vulnerabilities of Ethereum Smart Contracts}
@@ -59,8 +60,7 @@
 \maketitle              % typeset the header of the contribution
 %
 \begin{abstract}
-The task of detecting vulnerabilities in Ethereum smart contracts is critical as it protects smart-contract users from losing money due to adversarial exploitation. However, most vulnerabilities are described informally through their syntax rather than the harmful behaviors caused by them. Consequently, this gives rise to many false alarms for the tools that try to detect the bugs due to the mismatches in semantics. In this work, we propose a formal specification language for smart contracts that
- precisely characterizes the vulnerable behaviors via both syntactic and semantics level. We then develop a framework that can verify whether a smart contract is susceptible to the respective vulnerable specification. To evaluate the framework, we implement a C++ tool and use it to detect vulnerabilities of smart contracts on the Ethereum platform.
+The task of detecting vulnerabilities in Ethereum smart contracts is critical as it protects smart-contract users from losing money due to adversarial exploitation. In this work, we propose a formal specification language for smart contracts that precisely characterizes the vulnerable behaviors via both syntactic and semantics level. We then develop a framework that can verify whether a smart contract is susceptible to the respective vulnerable specification, and if so, synthesizes the transaction to replicate the attack scenario. To evaluate the framework, we implement a C++ tool and use it to detect vulnerabilities of smart contracts on the Ethereum platform.
 \keywords{First keyword  \and Second keyword \and Another keyword.}
 \end{abstract}
 
@@ -90,12 +90,46 @@ contract Attacker {
 \caption{Example of reentrancy attack.}\label{fig:ex1}
 \end{figure}
 
-Consider the Solidity function in Fig.~\ref{fig:ex1} in which the sender attempts to withdraw his Ethers recorded in $\texttt{balances[{\color{violet}msg.sender}]}$. The function first tries to conduct the transfer at line 2 in which an Ether amount of $\texttt{balances[{\color{violet}msg.sender}]}$ is sent to the address of the sender, ${\color{violet} \texttt{msg.sender}}$. If the transfer fails (\emph{e.g.} due to insufficient gas) then the transaction is reverted as shown at line 3. Otherwise it is successful and \texttt{balances[{\color{violet}msg.sender}]}---the balance of the sender---is set to 0 at line 4. 
 
-This contract is exposed to the reentrancy attack as the attacker can invoke $\texttt{withdraw}$ multiple times before his balance is set to 0, therefore allows him to withdraw more Ethers than he should. To see why, note that the $\color{blue}\texttt{call}$ function (line 2) also activates the fallback function of $\texttt{msg.sender}$. This allows him to call $\texttt{withdraw}$ from $\texttt{Money}$ contract again as long as the condition $\texttt{money.balance >= msg.value}$ is still satisfiable. Consequently, the Ethers in $\texttt{Money}$ are drained in just a single transaction.
+In Fig.~\ref{fig:ex1}, the function $\code{withdraw}$ allows users to withdraw all their money from the contract $\code{Money}$. Whenever a user (id $\code{msg.sender}$) invokes this function, all Ethers stored in $\code{balances[msg.sender]}$---his balance---are sent to $\code{msg.sender}$---his account. If this transfer is non-erroneous ,  $\code{balances[msg.sender]}$ is updated to be zero. Otherwise, the entire transaction is reverted. Interestingly, this contract is exposed to the infamous reentrancy attack in which the attacker can invoke $\texttt{withdraw}$ multiple times in a single transaction before his balance is reset, allowing him to withdraw more Ethers than what he has. This is due to the $\color{blue}\texttt{call}$ function's side effect which activates the fallback function from $\texttt{msg.sender}$ as the transfer is happening. By design, this fallback function allows him to recall $\texttt{withdraw}$ again until the condition $\texttt{money.balance >= msg.value}$ is no longer satisfiable. As a result, the attacker can drain almost all the Ethers in $\texttt{Money}$ in just a single transaction.
 
-To see how our technique can detect such vulnerability , let 
-\\
+We demonstrate how our framework is able to detect the above vulnerability. First, each statement in the function $\code{withdraw}$ is mapped to a unique string character:
+\begin{enumerate}
+	\item $\code{F} \leftarrow \code{withdraw()}$
+	\item $\code{a} \leftarrow \code{assert(msg.sender.call.value(balances[msg.sender])())}$
+	\item $\code{b} \leftarrow \code{assert(money.balance < msg.value)}$
+	\item  $\code{c} \leftarrow \code{assert(money.balance >= msg.value)}$
+	\item  $\code{d} \leftarrow \code{balances[msg.sender] = 0}$
+\end{enumerate}
+
+The above encoding is then used to generate a number of program traces. Intuitively, each trace is a sequence of statements from the indicated program and it is generated by traversing the program flow. When encountering a conditional statement if, the trace is split into two, each follows a branch. To ensure that the number of traces is finite and each trace is finite, we limit the number of times a loop is unrolled or a function is unfolded. Suppose that we limit the number of function unfolding to 3, then the following two traces can be extracted from $\code{withdraw}$:
+\begin{enumerate}
+	\item $
+	\mathcal{T}_1 = \code{F}[\code{a}[\code{b}] \rightarrow \code{d}]$
+	\item $\mathcal{T}_2 = \code{F}[\code{a}[\code{c} \rightarrow \code{F}[\code{a}[\code{b}] \rightarrow \code{d} ]] \rightarrow \code{d}]
+	$
+\end{enumerate}
+
+The vulnerability trace for reentrancy is described as:
+$$
+\mathcal{V} = \code{F}[?[? \rightarrow \code{F}[?] \rightarrow ?] \rightarrow ?]
+$$
+
+where each $?$ is a placeholder. Our framework then tries to match each traces $\mathcal{T}_i$ with $\mathcal{V}$. It transforms each $\mathcal{T}_i$ and $\mathcal{V}$ into strings $T_i$ and $V$ respectively:
+\begin{enumerate}
+	\item $V = \code{"F["} \cdot x_1 \cdot \code{"["} \cdot x_2 \cdot \code{"F["} \cdot x_3 \cdot \code{"]"} \cdot x_4 \code{"]"} \cdot x_5 \cdot  \code{"]"}$
+	\item $T_1 = \code{"F[a[b]d]"}$
+	\item $T_2 = \code{"F[a[cF[a[b]d]]d]"}$
+\end{enumerate}
+where $\{x_i\}_{i=1}^4$ are string variables. Next, the framework checks which word equations $T_1 = V$ is satisfiable. It can be verified that $T_1 = V$ has no solution while $T_2 = V$ has the following solution:
+$$
+x_1 = \code{"a"}, x_2 =  \code{"c"}, x_3 = \code{"a[b]d"}, x_4 = \epsilon, x_5 = \epsilon
+$$
+
+As a result, the trace $\mathcal{T}_2$ becomes a candidate to synthesize the adversary transaction. This is done by transforming the execution of $\mathcal{T}_2$ into a SAT constraint and checks for a solution.
+
+.
+
 $$P = \texttt{msg.sender.call.value(balances[msg.sender])()}$$
 $$
 a = \texttt{throw}~~~~b = \texttt{balances[msg.sender] = 0}
