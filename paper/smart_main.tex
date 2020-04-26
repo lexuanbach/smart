@@ -8,10 +8,11 @@
 
 \usepackage{graphicx}\usepackage{tikz,listings,proof}
 \usepackage{amssymb}
-\usepackage{stmaryrd}
+%\usepackage{stmaryrd}
 \usetikzlibrary{positioning,shapes,chains}
 \usetikzlibrary{shapes.multipart}
 \usetikzlibrary[calc]
+\usepackage{multirow}
 % Used for displaying a sample figure. If possible, figure files should
 % be included in EPS format.
 %
@@ -27,7 +28,7 @@
 \newcommand{\lstate}{\sigma}
 \newcommand{\gstate}{\mathtt{\Sigma}}
 \newcommand{\conf}[1]{\langle #1 \rangle}
-\newcommand{\eval}[1]{\llbracket #1 \rrbracket}
+\newcommand{\eval}[1]{[ #1 ]}
 \newcommand{\gas}{\mathcal{G}}
 \newcommand{\chain}{\mathbb{B}}
 \newcommand{\cstate}{\mathtt{\Gamma}}
@@ -36,9 +37,10 @@
 \newcommand{\trace}[2]{\mathsf{trace}(#1,#2)}
 \newcommand{\hide}[1]{}
 \newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\ct}[1]{{\color{red}#1}}
 \begin{document}
 %
-\title{Formal Specification for Detecting Vulnerabilities of Ethereum Smart Contracts}
+\title{On the Synthesis of Attack Vectors for Vulnerable Ethereum Smart Contracts}
 %
 %\titlerunning{Abbreviated paper title}
 % If the paper title is too long for the running head, you can set
@@ -60,11 +62,33 @@
 \maketitle              % typeset the header of the contribution
 %
 \begin{abstract}
-The task of detecting vulnerabilities in Ethereum smart contracts is critical as it protects smart-contract users from losing money due to adversarial exploitation. In this work, we propose a formal specification language for smart contracts that precisely characterizes the vulnerable behaviors via both syntactic and semantics level. We then develop a framework that can verify whether a smart contract is susceptible to the respective vulnerable specification, and if so, synthesizes the transaction to replicate the attack scenario. To evaluate the framework, we implement a C++ tool and use it to detect vulnerabilities of smart contracts on the Ethereum platform.
+The task of detecting vulnerabilities in Ethereum smart contracts is critical as it prevents smart-contract users from losing money due to adversarial exploitation. In this work, we propose a formal two-phase framework to detect vulnerable smart contracts and to synthesize the corresponding attack parameters. In the first phase, the faulty behavior and the suspicious smart contract are encoded into specialized strings which are compared against each other to detect the possible presence of bug. If the result is affirmative, the second phase helps confirm the vulnerability by synthesizing necessary context parameters to produce the actual bug. We implemented our framework in a C{$++$} tool and evaluated it over a number of Ethereum smart contracts.
 \keywords{First keyword  \and Second keyword \and Another keyword.}
 \end{abstract}
 
 \section{Introduction}
+
+
+\section{Illustrative examples}
+\begin{figure}
+	\begin{lstlisting}[language=Solidity]
+mapping (address => uint256) public balanceOf;
+
+function transfer(address _to, uint256 _value) {
+  /* Check if sender has balance */
+  require(balanceOf[msg.sender] >= _value);
+  /* Add and subtract new balances */
+  balanceOf[msg.sender] -= _value;
+  balanceOf[_to] += _value;}
+	\end{lstlisting}
+	\caption{Example of integer overflow vulnerability.}\label{fig:ex1}
+\end{figure}
+
+Fig.~\ref{fig:ex1} shows a typical example of the integer overflow bug which is adopted from~\cite{ebugs}. The $\code{transfer}$ function allows a user --- whose balance is stored in $\code{balanceOf[msg.sender]}$ --- to send an amount of $\code{\_value}$ Ethers to another balance $\code{balanceOf[\_to]}$. The function first verifies that the user's balance has sufficient credit (line 5) before it deducts the corresponding amount from the sender's balance (line 7) and adds that amount to the receiver's balance (line 8).
+
+When a user calls the function $\code{transfer}$ to send an amount of $\code{\_value}$ Ethers to the receiver's address $\code{\_to}$, his balance - stored in $\code{balanceOf[msf.sender]}$ - i
+
+
 
 \begin{figure}
 \begin{lstlisting}[language=Solidity]
@@ -87,11 +111,14 @@ contract Attacker {
  }
 }
 \end{lstlisting}
-\caption{Example of reentrancy attack.}\label{fig:ex1}
+\caption{Example of reentrancy attack.}\label{fig:ex2}
 \end{figure}
 
 
-In Fig.~\ref{fig:ex1}, the function $\code{withdraw}$ allows users to withdraw all their money from the contract $\code{Money}$. Whenever a user (id $\code{msg.sender}$) invokes this function, all Ethers stored in $\code{balances[msg.sender]}$---his balance---are sent to $\code{msg.sender}$---his account. If this transfer is non-erroneous ,  $\code{balances[msg.sender]}$ is updated to be zero. Otherwise, the entire transaction is reverted. Interestingly, this contract is exposed to the infamous reentrancy attack in which the attacker can invoke $\texttt{withdraw}$ multiple times in a single transaction before his balance is reset, allowing him to withdraw more Ethers than what he has. This is due to the $\color{blue}\texttt{call}$ function's side effect which activates the fallback function from $\texttt{msg.sender}$ as the transfer is happening. By design, this fallback function allows him to recall $\texttt{withdraw}$ again until the condition $\texttt{money.balance >= msg.value}$ is no longer satisfiable. As a result, the attacker can drain almost all the Ethers in $\texttt{Money}$ in just a single transaction.
+Fig.~\ref{fig:ex1} illustrates the infamous re-entrancy attack that costs millions of dollars for the DAO project~\ct.
+
+
+ the function $\code{withdraw}$ allows users to withdraw all their money from the contract $\code{Money}$. Whenever a user (id $\code{msg.sender}$) invokes this function, all Ethers stored in $\code{balances[msg.sender]}$---his balance---are sent to $\code{msg.sender}$---his account. If this transfer is non-erroneous ,  $\code{balances[msg.sender]}$ is updated to be zero. Otherwise, the entire transaction is reverted. Interestingly, this contract is exposed to the infamous reentrancy attack in which the attacker can invoke $\texttt{withdraw}$ multiple times in a single transaction before his balance is reset, allowing him to withdraw more Ethers than what he has. This is due to the $\color{blue}\texttt{call}$ function's side effect which activates the fallback function from $\texttt{msg.sender}$ as the transfer is happening. By design, this fallback function allows him to recall $\texttt{withdraw}$ again until the condition $\texttt{money.balance >= msg.value}$ is no longer satisfiable. As a result, the attacker can drain almost all the Ethers in $\texttt{Money}$ in just a single transaction.
 
 We demonstrate how our framework is able to detect the above vulnerability. First, each statement in the function $\code{withdraw}$ is mapped to a unique string character:
 \begin{enumerate}
@@ -110,12 +137,13 @@ The above encoding is then used to generate a number of program traces. Intuitiv
 	$
 \end{enumerate}
 
-The vulnerability trace for reentrancy is described as:
+The vulnerability trace for reentrancy is encoded as:
 $$
-\mathcal{V} = \code{F}[?[? \rightarrow \code{F}[?] \rightarrow ?] \rightarrow ?]
+\mathcal{V} = \code{F}[t_1[\code{assert(F.balance >= msg.value)} \rightarrow \code{F}[t_2]] \rightarrow t_3]
 $$
 
-where each $?$ is a placeholder. Our framework then tries to match each traces $\mathcal{T}_i$ with $\mathcal{V}$. It transforms each $\mathcal{T}_i$ and $\mathcal{V}$ into strings $T_i$ and $V$ respectively:
+
+where each $t_i$ is a string variable that needs to be guessed. The assertion $\code{assert(F.balance >= msg.value)}$ is necessary to ensure the termination of the execution where $\code{F.balance}$ is a syntactic sugar to refer $\code{balance}$ to the context of the contract that contains $\code{F}$. Our framework then tries to match each traces $\mathcal{T}_i$ with $\mathcal{V}$. It transforms each $\mathcal{T}_i$ and $\mathcal{V}$ into strings $T_i$ and $V$ respectively:
 \begin{enumerate}
 	\item $V = \code{"F["} \cdot x_1 \cdot \code{"["} \cdot x_2 \cdot \code{"F["} \cdot x_3 \cdot \code{"]"} \cdot x_4 \code{"]"} \cdot x_5 \cdot  \code{"]"}$
 	\item $T_1 = \code{"F[a[b]d]"}$
@@ -256,7 +284,7 @@ A trace set $T$ is called a $n$-approximation of a program $c$ if $c\trianglerig
 	\end{definition}
 
 \section{Verification framework}
-\input{framework.tex}
+%\input{framework.tex}
 
 
 \section{Specification language}
@@ -268,8 +296,55 @@ A trace set $T$ is called a $n$-approximation of a program $c$ if $c\trianglerig
 
 \section{Evaluation}
 
+\subsection{Experiment design}\label{sub:exp-design}
+
+To evaluate the performance of the proposed framework in \S\ct{SEC}, we design our experiments aiming to answer the following important research questions:
+
+\begin{enumerate}
+	\item[$-$] \textbf{Q1}) How practical is our framework in detecting the potential vulnerabilities of Ethereum smart contracts?
+	\item[$-$] \textbf{Q2}) How effective are the synthesized attack parameters in reproducing the actual bugs? 
+	\item[$-$] \textbf{Q3}) How efficient are the ad-hoc optimizations --- as discussed in \S\ct{SEC} -- with regard to the tool's overall accuracy and precision? 
+\end{enumerate}
+
+To answer the above questions, we prepare a benchmark consisting of \ct{NUM} Ethererum smart contracts with source code taken from \ct{SOURCE}. \ct{Some more details about the benchmark}. For each specific type of vulnerability mentioned in \S\ct{SEC}, we run our tool \ct{NAME} --- with the corresponding vulnerable trace --- on the benchmark  and collectively record the susceptible contracts flagged by the tool. This bookkeeping provides the number of vulnerabilities that our tool is able to detect, and therefore the answer to question \textbf{Q1}. 
+
+As for the synthesized attack parameters, we use them to reproduce the bugs and to measure the specification (true-negative rate) and sensitivity (true-positive rate) of the experiment. These results provide important insights to answer question $\textbf{Q2}$. Each smart contract's function, together with respective attack parameters, is executed on a local Ethereum node --- a simulated environment --- to witness the harmful effect. For example, a function flagged with the integer overflow bug is confirmed if one variable changes value from positive to negative right after an assignment that is otherwise meant to increase its value.
+
+We answer $\textbf{Q3}$ by implementing the discussed optimizations \S\ct{SEC} into \ct{NAME} and testing the optimized tool --- dubbed \ct{NAME+} --- against the benchmark. Performance results between \ct{NAME} and \ct{NAME+} are then compared to each other, helping to draw conclusions about the optimizations' significance.
+
+
+\subsection{Experiment result}
+
+Our tool \ct{NAME} and its optimized version \ct{NAME+} are thoroughly tested against the proposed benchmark in~\ref{sub:exp-design}, on a computer with \ct{SPEC}. For each vulnerability type, we measure the number of susceptible contracts --- detected by the tools --- together with their true-positive and true-negative rates.  These key results are summarized in Table~\ref{table:exp}.
+
+\ct{now the blah blah blah...}
+
+\begin{table}[t]
+	\centering
+\begin{tabular}{|l|l|c|c|c|c|c|c|}
+	\hline
+	\multirow{2}{*}{No} & \multicolumn{1}{c|}{\multirow{2}{*}{Bug type}} & \multicolumn{3}{c|}{NAME}      & \multicolumn{3}{c|}{NAME+}     \\ \cline{3-8} 
+	& \multicolumn{1}{c|}{}                          & detected & true+    & true-    & detected & true+    & true-    \\ \hline
+	1                   & integer overflow                               & 50       & 40(80\%) & 10(20\%) & 60       & 50(83\%) & 10(17\%) \\ \hline
+	2                   & integer underflow                              &          &          &          &          &          &          \\ \hline
+	3                   & gasless send                                   &          &          &          &          &          &          \\ \hline
+	4                   & block dependency                               &          &          &          &          &          &          \\ \hline
+	5                   & timestamp dependency                           &          &          &          &          &          &          \\ \hline
+	6                   & re-entrancy                                    &          &          &          &          &          &          \\ \hline
+\end{tabular}
+\vspace{1em}
+\caption{Performance results of \ct{NAME} and \ct{NAME+}.}\label{table:exp}
+\end{table}
+
+\subsection{Case study and further discussions}
+\ct{something interesting....}
+\\
+\ct{discussion about false-positive...}
+
 \section{Related work}
 
 \section{Conclusion}
+\bibliographystyle{plain}
+\bibliography{smart_main} 
 
 \end{document}
